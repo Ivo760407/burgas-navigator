@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -295,7 +297,152 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+Future<void> _searchLocation() async {
+  const apiKey = String.fromEnvironment('GEOAPIFY_API_KEY');
 
+  if (apiKey.isEmpty) {
+    _showMessage(
+      context,
+      language == 'en'
+          ? 'Geoapify API key is missing.'
+          : language == 'de'
+              ? 'Geoapify API-Schlüssel fehlt.'
+              : 'Geoapify API ключът липсва.',
+    );
+    return;
+  }
+
+  final controller = TextEditingController();
+
+  final query = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: Text(
+          language == 'en'
+              ? 'Where do you want to go?'
+              : language == 'de'
+                  ? 'Wohin möchtest du gehen?'
+                  : 'Къде искаш да отидеш?',
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: language == 'en'
+                ? 'Enter an address or place'
+                : language == 'de'
+                    ? 'Adresse oder Ort eingeben'
+                    : 'Въведи адрес или място',
+          ),
+          onSubmitted: (value) {
+            Navigator.pop(dialogContext, value);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              language == 'en'
+                  ? 'Cancel'
+                  : language == 'de'
+                      ? 'Abbrechen'
+                      : 'Отказ',
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, controller.text);
+            },
+            child: Text(
+              language == 'en'
+                  ? 'Search'
+                  : language == 'de'
+                      ? 'Suchen'
+                      : 'Търси',
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+  controller.dispose();
+
+  if (!mounted || query == null || query.trim().isEmpty) {
+    return;
+  }
+
+  final uri = Uri.https(
+    'api.geoapify.com',
+    '/v1/geocode/search',
+    {
+      'text': query.trim(),
+      'format': 'json',
+      'limit': '1',
+      'apiKey': apiKey,
+    },
+  );
+
+  try {
+    final response = await http.get(uri);
+
+    if (!mounted) return;
+
+    if (response.statusCode != 200) {
+      _showMessage(
+        context,
+        language == 'en'
+            ? 'Search failed.'
+            : language == 'de'
+                ? 'Suche fehlgeschlagen.'
+                : 'Търсенето неуспешно.',
+      );
+      return;
+    }
+
+    final data = jsonDecode(response.body);
+    final results = data['results'] as List<dynamic>;
+
+    if (results.isEmpty) {
+      _showMessage(
+        context,
+        language == 'en'
+            ? 'Location not found.'
+            : language == 'de'
+                ? 'Ort nicht gefunden.'
+                : 'Мястото не е намерено.',
+      );
+      return;
+    }
+
+    final result = results.first as Map<String, dynamic>;
+    final latitude = (result['lat'] as num).toDouble();
+    final longitude = (result['lon'] as num).toDouble();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LocationMapScreen(
+          latitude: latitude,
+          longitude: longitude,
+          language: language,
+        ),
+      ),
+    );
+  } catch (_) {
+    if (!mounted) return;
+
+    _showMessage(
+      context,
+      language == 'en'
+          ? 'Could not connect to the search service.'
+          : language == 'de'
+              ? 'Verbindung zum Suchdienst fehlgeschlagen.'
+              : 'Връзката с услугата за търсене неуспешна.',
+    );
+  }
+}
   Future<void> _getCurrentLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -439,16 +586,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icons.mic,
                 title: whereTo,
                 subtitle: whereToSubtitle,
-                onPressed: () {
-                  _showMessage(
-                    context,
-                    language == 'en'
-                        ? 'Voice search will be added.'
-                        : language == 'de'
-                            ? 'Die Sprachsuche wird hinzugefügt.'
-                            : 'Гласовото търсене ще бъде добавено.',
-                  );
-                },
+                onPressed: _searchLocation,
               ),
 
               const SizedBox(height: 25),
