@@ -527,15 +527,58 @@ Future<void> _searchLocation() async {
     );
   }
 }
+  void _showLocationLoading() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final message = language == 'en'
+            ? 'Finding your location...'
+            : language == 'de'
+                ? 'Standort wird ermittelt...'
+                : 'Определям местоположението...';
+
+        return AlertDialog(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _hideLocationLoading() {
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   Future<void> _getCurrentLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
+
+    if (!mounted) return;
+    _showLocationLoading();
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
     if (!mounted) return;
 
     if (!serviceEnabled) {
+      _hideLocationLoading();
       _showMessage(
         context,
         language == 'en'
@@ -559,6 +602,7 @@ Future<void> _searchLocation() async {
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
+      _hideLocationLoading();
       _showMessage(
         context,
         language == 'en'
@@ -570,7 +614,22 @@ Future<void> _searchLocation() async {
       return;
     }
 
-    Position position = await Geolocator.getCurrentPosition();
+    Position position;
+    try {
+      position = await Geolocator.getCurrentPosition();
+    } catch (_) {
+      if (!mounted) return;
+      _hideLocationLoading();
+      _showMessage(
+        context,
+        language == 'en'
+            ? 'Could not determine your location.'
+            : language == 'de'
+                ? 'Ihr Standort konnte nicht ermittelt werden.'
+                : 'Местоположението ви не може да бъде определено.',
+      );
+      return;
+    }
 
     Placemark? placemark;
     try {
@@ -594,7 +653,9 @@ Future<void> _searchLocation() async {
 
     if (!mounted) return;
 
-    await _speak(_buildLocationMessage(placemark, position));
+    final locationMessage = _buildLocationMessage(placemark, position);
+    _hideLocationLoading();
+    await _speak(locationMessage);
 
     if (!mounted) return;
 
