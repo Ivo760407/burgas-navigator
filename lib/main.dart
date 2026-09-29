@@ -1073,8 +1073,9 @@ class LocationMapScreen extends StatelessWidget {
         ),
         children: [
           TileLayer(
+            // OpenStreetMap tiles — не изискват CARTO API key.
             urlTemplate:
-                'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName:
                 'com.example.burgas_navigator',
           ),
