@@ -263,14 +263,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _prepareBulgarianTts(String message) {
+    if (language != 'bg') return message;
+    return message
+        .replaceAll('Намирате се', 'Вие сте')
+        .replaceAll('Текущото ви местоположение е', 'Вие сте на')
+        .replaceAll(' на улица ', ', улица ')
+        .replaceAll('  ', ' ')
+        .trim();
+  }
+
   Future<void> _speak(String message) async {
     try {
       await _setTtsLanguage();
       await _tts.stop();
 
       // Допълнителните паузи правят изговарянето по-човешко.
-      final naturalMessage = message
+      final preparedMessage = _prepareBulgarianTts(message);
+      final naturalMessage = preparedMessage
           .replaceAll(':', ': ')
+          .replaceAll(', ', ',  ')
           .replaceAll('. ', '.  ');
 
       await _tts.speak(naturalMessage);
@@ -314,12 +326,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (city != null && address.isNotEmpty) {
-      return 'Намирате се в $city, на $address.';
+      return 'Вие сте в $city, на адрес $address.';
     }
     if (city != null) {
-      return 'Намирате се в $city. Координатите ви са ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+      return 'Вие сте в $city.';
     }
-    return 'Текущото ви местоположение е ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+    return 'Вие сте на текущото си местоположение.';
   }
 
   @override
