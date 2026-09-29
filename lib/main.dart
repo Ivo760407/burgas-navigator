@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -188,11 +190,93 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late String language;
+  final FlutterTts _tts = FlutterTts();
 
   @override
   void initState() {
     super.initState();
     language = widget.initialLanguage;
+    _configureTts();
+  }
+
+  Future<void> _configureTts() async {
+    await _tts.setSpeechRate(0.48);
+    await _tts.setVolume(1.0);
+    await _tts.setPitch(1.0);
+    await _setTtsLanguage();
+  }
+
+  Future<void> _setTtsLanguage() async {
+    final locale = language == 'en'
+        ? 'en-US'
+        : language == 'de'
+            ? 'de-DE'
+            : 'bg-BG';
+
+    try {
+      await _tts.setLanguage(locale);
+    } catch (_) {
+      // The device may not have the selected voice installed.
+    }
+  }
+
+  Future<void> _speak(String message) async {
+    try {
+      await _setTtsLanguage();
+      await _tts.stop();
+      await _tts.speak(message);
+    } catch (_) {
+      // Voice output is optional; location and map should still work.
+    }
+  }
+
+  String _buildLocationMessage(Placemark? placemark, Position position) {
+    final city = placemark?.locality?.trim().isNotEmpty == true
+        ? placemark!.locality!.trim()
+        : placemark?.subAdministrativeArea?.trim().isNotEmpty == true
+            ? placemark!.subAdministrativeArea!.trim()
+            : null;
+
+    final street = placemark?.street?.trim() ?? '';
+    final number = placemark?.name?.trim() ?? '';
+    final address = [street, number]
+        .where((part) => part.isNotEmpty)
+        .join(' ')
+        .trim();
+
+    if (language == 'en') {
+      if (city != null && address.isNotEmpty) {
+        return 'You are in $city, at $address.';
+      }
+      if (city != null) {
+        return 'You are in $city. Your coordinates are ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+      }
+      return 'Your current location is ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+    }
+
+    if (language == 'de') {
+      if (city != null && address.isNotEmpty) {
+        return 'Sie befinden sich in $city, in $address.';
+      }
+      if (city != null) {
+        return 'Sie befinden sich in $city. Ihre Koordinaten sind ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+      }
+      return 'Ihr aktueller Standort ist ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+    }
+
+    if (city != null && address.isNotEmpty) {
+      return 'Намирате се в $city, на $address.';
+    }
+    if (city != null) {
+      return 'Намирате се в $city. Координатите ви са ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+    }
+    return 'Текущото ви местоположение е ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}.';
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
   }
 
   String get subtitle {
@@ -487,6 +571,30 @@ Future<void> _searchLocation() async {
     }
 
     Position position = await Geolocator.getCurrentPosition();
+
+    Placemark? placemark;
+    try {
+      final geocoding = Geocoding(
+        locale: language == 'en'
+            ? const Locale('en', 'US')
+            : language == 'de'
+                ? const Locale('de', 'DE')
+                : const Locale('bg', 'BG'),
+      );
+      final placemarks = await geocoding.placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (placemarks.isNotEmpty) {
+        placemark = placemarks.first;
+      }
+    } catch (_) {
+      // Reverse geocoding can fail due to platform service/rate limits.
+    }
+
+    if (!mounted) return;
+
+    await _speak(_buildLocationMessage(placemark, position));
 
     if (!mounted) return;
 
