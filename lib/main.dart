@@ -200,9 +200,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _configureTts() async {
-    await _tts.setSpeechRate(0.48);
+    // По-бавен темп и естествена височина, вместо типичен роботизиран
+    // навигационен тон. Самият глас идва от TTS двигателя на телефона.
+    await _tts.awaitSpeakCompletion(true);
+    await _tts.setSpeechRate(0.43);
     await _tts.setVolume(1.0);
-    await _tts.setPitch(1.0);
+    await _tts.setPitch(0.97);
     await _setTtsLanguage();
   }
 
@@ -215,8 +218,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       await _tts.setLanguage(locale);
+
+      // Ако телефонът предлага network/neural/natural вариант,
+      // предпочитаме него пред стария локален глас.
+      final voices = await _tts.getVoices;
+      final matching = voices
+          .whereType<Map>()
+          .where((voice) {
+            final voiceLocale =
+                (voice['locale'] ?? '').toString().toLowerCase();
+            return voiceLocale == locale.toLowerCase();
+          })
+          .toList();
+
+      if (matching.isNotEmpty) {
+        matching.sort((a, b) {
+          final aName = (a['name'] ?? '').toString().toLowerCase();
+          final bName = (b['name'] ?? '').toString().toLowerCase();
+
+          int score(String name) {
+            var value = 0;
+            if (name.contains('network')) value += 3;
+            if (name.contains('neural')) value += 3;
+            if (name.contains('natural')) value += 3;
+            if (name.contains('wavenet')) value += 2;
+            if (name.contains('local')) value -= 2;
+            return value;
+          }
+
+          return score(bName).compareTo(score(aName));
+        });
+
+        final selected = matching.first;
+        final name = selected['name']?.toString();
+        if (name != null && name.isNotEmpty) {
+          await _tts.setVoice({
+            'name': name,
+            'locale': locale,
+          });
+        }
+      }
     } catch (_) {
-      // The device may not have the selected voice installed.
+      // Ако устройството не дава списък с гласове, остава избраният locale.
     }
   }
 
@@ -224,7 +267,13 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await _setTtsLanguage();
       await _tts.stop();
-      await _tts.speak(message);
+
+      // Допълнителните паузи правят изговарянето по-човешко.
+      final naturalMessage = message
+          .replaceAll(':', ': ')
+          .replaceAll('. ', '.  ');
+
+      await _tts.speak(naturalMessage);
     } catch (_) {
       // Voice output is optional; location and map should still work.
     }
