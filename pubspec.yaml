@@ -35,6 +35,7 @@ dependencies:
   geolocator: ^14.0.3
   geocoding: ^5.0.0
   flutter_tts: ^4.2.5
+  audioplayers: ^6.8.1
   maplibre_gl: ^0.25.0
   http: ^1.6.0
   speech_to_text: ^7.4.0
