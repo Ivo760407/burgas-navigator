@@ -265,12 +265,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _prepareBulgarianTts(String message) {
     if (language != 'bg') return message;
-    return message
+
+    // Android TTS често произнася уличните съкращения буквално.
+    // Разписваме ги с думи, за да се получи по-естествено произношение.
+    var result = message
+        .replaceAll(RegExp(r'\\bбул\\.\\s*', caseSensitive: false), 'булевард ')
+        .replaceAll(RegExp(r'\\bул\\.\\s*', caseSensitive: false), 'улица ')
+        .replaceAll(RegExp(r'\\bпл\\.\\s*', caseSensitive: false), 'площад ')
+        .replaceAll(RegExp(r'\\bкв\\.\\s*', caseSensitive: false), 'квартал ')
+        .replaceAll(RegExp(r'\\bж\\.\\s*к\\.\\s*', caseSensitive: false), 'жилищен комплекс ')
+        .replaceAll(RegExp(r'\\bжк\\s+', caseSensitive: false), 'жилищен комплекс ')
         .replaceAll('Намирате се', 'Вие сте')
-        .replaceAll('Текущото ви местоположение е', 'Вие сте на')
-        .replaceAll(' на улица ', ', улица ')
-        .replaceAll('  ', ' ')
+        .replaceAll('Текущото ви местоположение е', 'Вие сте на');
+
+    // Малки паузи около номерата и препинателните знаци помагат на
+    // навигационния стил и намаляват сливането на думи.
+    result = result
+        .replaceAll(RegExp(r'\\s*,\\s*'), ', ')
+        .replaceAll(RegExp(r'\\s+'), ' ')
         .trim();
+
+    return result;
   }
 
   Future<void> _speak(String message) async {
