@@ -1,5 +1,7 @@
 import http from 'node:http';
 import { GoogleAuth } from 'google-auth-library';
+import { initializeApp } from 'firebase-admin/app';
+import { getAppCheck } from 'firebase-admin/app-check';
 
 const port = Number(process.env.PORT || 8080);
 const maxTextLength = 300;
@@ -8,6 +10,7 @@ const windowMs = 60_000;
 const maxRequests = 30;
 const buckets = new Map();
 const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+initializeApp();
 
 const voices = { bg: 'bg-BG-Chirp3-HD-Achernar', en: 'en-US-Chirp3-HD-Achernar', de: 'de-DE-Chirp3-HD-Achernar' };
 const languageCodes = { bg: 'bg-BG', en: 'en-US', de: 'de-DE' };
@@ -32,6 +35,16 @@ setInterval(() => {
   const cutoff = Date.now() - windowMs * 2;
   for (const [key, bucket] of buckets) if (bucket.startedAt < cutoff) buckets.delete(key);
 }, windowMs).unref();
+
+async function verifyAppCheck(req) {
+  const token = req.headers['x-firebase-appcheck'];
+  if (typeof token !== 'string' || !token.trim()) return null;
+  try {
+    return await getAppCheck().verifyToken(token.trim());
+  } catch (_) {
+    return null;
+  }
+}
 
 async function readJson(req) {
   const chunks = []; let total = 0;
@@ -67,6 +80,9 @@ async function synthesize(text, language) {
 const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/health') return sendJson(res, 200, { ok: true });
   if (req.method !== 'POST' || req.url !== '/tts') return sendJson(res, 404, { error: 'Not found' });
+
+  const appCheck = await verifyAppCheck(req);
+  if (!appCheck) return sendJson(res, 401, { error: 'App verification failed.' });
   if (!allowed(req)) return sendJson(res, 429, { error: 'Too many requests. Please try again later.' }, { 'Retry-After': '60' });
 
   try {
