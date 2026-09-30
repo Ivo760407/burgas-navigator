@@ -43,13 +43,11 @@ Secure production exposure of the `POST /tts` endpoint before making the service
 ```
 Flutter app
    |
-   | HTTPS POST /tts
-   v
-Cloud Run / Firebase App Check protected endpoint
-   |
+   | HTTPS POST /tts + Firebase App Check token
    v
 Cloud Run
    |
+   | Firebase Admin verifies App Check
    | Google-authenticated server-to-server request
    v
 Google Cloud Text-to-Speech
@@ -146,7 +144,7 @@ Expected production model:
 - Dedicated service account attached to Cloud Run.
 - No service-account JSON key in repository.
 - No Google API key in Flutter.
-- Cloud Run should not be unnecessarily exposed directly to the public internet once a protected gateway is in place.
+- Cloud Run should not be unnecessarily exposed as an unrestricted backend; App Check is enforced at the application layer.
 
 ## Firebase App Check / Protection
 
@@ -353,4 +351,6 @@ Never request or store secrets in this context file.
 - Confirmed repository default branch is `main`.
 - Confirmed Cloud TTS backend exists under `backend/cloud-run/`.
 - Confirmed Flutter already supports `CLOUD_TTS_URL` and local TTS fallback.
-- Confirmed production gateway/rate-limiting work remains outstanding.
+- Switched TTS protection design from API Gateway/API key to Firebase App Check + Cloud Run.
+- Added Firebase App Check verification to the Cloud Run TTS endpoint.
+- Removed API Gateway/API-key configuration from the security branch.
