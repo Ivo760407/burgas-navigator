@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,7 +11,15 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await FirebaseAppCheck.instance.activate(
+    androidProvider:
+        kReleaseMode ? AndroidProvider.playIntegrity : AndroidProvider.debug,
+    appleProvider:
+        kReleaseMode ? AppleProvider.appAttest : AppleProvider.debug,
+  );
   runApp(const BurgasNavigatorApp());
 }
 
@@ -299,8 +310,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final response = await http
           .post(
             Uri.parse(_cloudTtsUrl),
-            headers: const {
+            headers: {
               'Content-Type': 'application/json',
+              'X-Firebase-AppCheck':
+                  await FirebaseAppCheck.instance.getToken(true) ?? '',
             },
             body: jsonEncode({
               'text': preparedMessage,
