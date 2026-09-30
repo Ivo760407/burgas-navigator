@@ -37,7 +37,7 @@ App Check is an application/device-attestation layer, not a guarantee that a det
 3. Add the Android and iOS apps to the Firebase project.
 4. Configure Firebase App Check: Android Play Integrity, iOS App Attest.
 5. During development, register App Check debug tokens for debug builds.
-6. Create a dedicated Cloud Run service account with permission to use Text-to-Speech.
+6. Create a dedicated Cloud Run service account with permission to use Text-to-Speech and Firebase App Check token verification (`roles/firebaseappcheck.tokenVerifier`).
 7. Deploy this directory to Cloud Run.
 8. Use Application Default Credentials from the Cloud Run service account; never create or commit a service-account JSON key.
 9. Set the deployed HTTPS URL as Flutter's `CLOUD_TTS_URL` using `--dart-define`.
