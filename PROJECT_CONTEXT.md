@@ -30,8 +30,8 @@ Secure production exposure of the `POST /tts` endpoint before making the service
 
 ### Next tasks
 
-1. Protect the public TTS endpoint with an API Gateway or equivalent authenticated/controlled front door.
-2. Add abuse protection/rate limiting.
+1. Protect the public TTS endpoint with Firebase App Check verified by Cloud Run.
+2. Keep abuse protection/rate limiting.
 3. Keep Google Cloud credentials server-side only.
 4. Deploy Cloud Run with a dedicated service account.
 5. Configure the Flutter build with `--dart-define=CLOUD_TTS_URL=...`.
@@ -45,7 +45,7 @@ Flutter app
    |
    | HTTPS POST /tts
    v
-API Gateway / protected public endpoint
+Cloud Run / Firebase App Check protected endpoint
    |
    v
 Cloud Run
@@ -135,7 +135,7 @@ Configured Google Cloud voices:
 - EN: `en-US-Chirp3-HD-Achernar`
 - DE: `de-DE-Chirp3-HD-Achernar`
 
-The backend uses `google-auth-library` and obtains a Google access token server-side.
+The backend uses `google-auth-library` and obtains a Google access token server-side. It also uses `firebase-admin` to verify Firebase App Check tokens.
 
 ## Cloud Run
 
@@ -203,7 +203,7 @@ Secrets belong in Google Cloud Secret Manager or the appropriate server-side cre
 - [ ] No service-account JSON in repository.
 - [ ] No credentials in `--dart-define`.
 - [ ] Cloud Run uses a dedicated service account.
-- [ ] TTS endpoint is protected before public release.
+- [ ] Firebase App Check is configured and enforced before public release.
 - [ ] Rate limiting / abuse protection enabled.
 - [ ] Text length and language validation enabled.
 - [ ] Generic client-facing error messages.
@@ -252,9 +252,7 @@ Backend/TTS failure:
 
 ## Rate Limiting
 
-Rate limiting is not yet implemented in the Cloud Run server.
-
-Before public exposure, add gateway/server-side abuse protection.
+Cloud Run currently limits each observed client to 30 requests/minute. This is per Cloud Run instance and therefore is not a complete distributed quota. Google Cloud quotas/budget monitoring should also be enabled.
 
 At minimum consider:
 
@@ -271,7 +269,7 @@ At minimum consider:
 2. Flutter receives only generated audio.
 3. Local TTS remains a fallback.
 4. Cloud TTS URL is supplied at build time through `CLOUD_TTS_URL`.
-5. Production public traffic should go through a protected gateway.
+5. Production TTS traffic is protected by Firebase App Check and Cloud Run verification.
 6. Do not put secrets in GitHub, Flutter assets, Dart constants, or APK resources.
 
 ## Git Workflow
@@ -288,11 +286,10 @@ Avoid destructive history rewrites unless explicitly requested.
 
 ## Known Problems / Open Questions
 
-- The current `/tts` endpoint itself has no authentication or rate limiting.
+- Firebase project and Android/iOS App Check configuration still need to be created and tested.
 - Production Cloud Run deployment has not yet been documented with exact project/service names.
-- API Gateway configuration still needs to be created and tested.
-- Need to decide the final gateway authentication and quota model.
-- Need to verify Cloud Run ingress and invocation permissions after gateway setup.
+- Need to verify Play Integrity/App Attest in release builds.
+- Need to verify Cloud Run ingress/access policy and Google TTS IAM permissions.
 
 ## Deployment Checklist
 
@@ -313,6 +310,7 @@ Avoid destructive history rewrites unless explicitly requested.
 ### Flutter
 
 - [ ] Set production `CLOUD_TTS_URL` via `--dart-define`.
+- [ ] Configure Firebase Android/iOS app files for the project.
 - [ ] Build release APK.
 - [ ] Test BG.
 - [ ] Test EN.
@@ -337,9 +335,9 @@ Then inspect the relevant current files in the repository before changing anythi
 
 Current priority:
 
-1. Secure `/tts`.
-2. Configure API Gateway.
-3. Add rate limiting/abuse protection.
+1. Secure `/tts` with Firebase App Check.
+2. Configure Firebase/Play Integrity/App Attest.
+3. Keep rate limiting/abuse protection.
 4. Verify Cloud Run service-account permissions.
 5. Update/document deployment commands.
 6. Test the Flutter cloud TTS path.
