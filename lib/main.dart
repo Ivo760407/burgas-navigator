@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -191,6 +192,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late String language;
   final FlutterTts _tts = FlutterTts();
+  final AudioPlayer _cloudPlayer = AudioPlayer();
+  static const String _cloudTtsUrl = String.fromEnvironment('CLOUD_TTS_URL');
 
   @override
   void initState() {
@@ -288,12 +291,50 @@ class _HomeScreenState extends State<HomeScreen> {
     return result;
   }
 
+  Future<bool> _speakWithCloudTts(String message) async {
+    if (_cloudTtsUrl.trim().isEmpty) return false;
+
+    try {
+      final preparedMessage = _prepareBulgarianTts(message);
+      final response = await http
+          .post(
+            Uri.parse(_cloudTtsUrl),
+            headers: const {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'text': preparedMessage,
+              'language': language,
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode != 200 ||
+          response.bodyBytes.isEmpty ||
+          !mounted) {
+        return false;
+      }
+
+      await _tts.stop();
+      await _cloudPlayer.stop();
+      await _cloudPlayer.play(
+        BytesSource(response.bodyBytes, mimeType: 'audio/mpeg'),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _speak(String message) async {
     try {
+      if (await _speakWithCloudTts(message)) return;
+
       await _setTtsLanguage();
       await _tts.stop();
 
-      // Допълнителните паузи правят изговарянето по-човешко.
+      // Резервен вариант: локалният Android TTS остава наличен при
+      // липса на интернет или ако облачният TTS не е конфигуриран.
       final preparedMessage = _prepareBulgarianTts(message);
       final naturalMessage = preparedMessage
           .replaceAll(':', ': ')
@@ -352,6 +393,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _tts.stop();
+    _cloudPlayer.dispose();
     super.dispose();
   }
 
