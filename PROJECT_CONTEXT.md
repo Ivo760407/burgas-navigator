@@ -148,30 +148,40 @@ Expected production model:
 - No Google API key in Flutter.
 - Cloud Run should not be unnecessarily exposed directly to the public internet once a protected gateway is in place.
 
-## API Gateway / Protection
+## Firebase App Check / Protection
 
 Production target:
 
-```text
-Public HTTPS
-   -> API Gateway
-   -> Cloud Run /tts
+```
+Flutter app
+   |
+   | HTTPS POST /tts + X-Firebase-AppCheck
+   v
+Cloud Run
+   |
+   | Firebase Admin verifies App Check
+   v
+Google Cloud Text-to-Speech
 ```
 
 Protection requirements:
+- No login is required for the demo experience.
+- Flutter obtains a Firebase App Check token automatically.
+- Android release builds use Play Integrity; iOS release builds use App Attest.
+- Debug builds use the App Check debug provider.
+- Cloud Run verifies the App Check token before invoking Google TTS.
+- Cloud Run keeps a 30 requests/minute per observed client limit, 8 KB request-body limit and 300-character TTS limit.
+- Google credentials remain server-side through the Cloud Run service account.
+- App Check is not treated as a secret or absolute anti-abuse guarantee; rate limiting and Google Cloud quotas/budget monitoring remain required.
+- Cloud Run should not be an unrestricted public backend.
 
-- Do not rely on a secret embedded in the APK as the only authentication mechanism.
-- Add rate limiting / abuse control.
-- Restrict the backend so arbitrary internet users cannot freely generate unlimited TTS.
-- Keep Google authentication between Cloud Run and Google APIs server-side.
-- Return generic error messages to clients; do not leak internal Google error details.
+`CLOUD_TTS_URL` contains only the public HTTPS endpoint and is not a credential.
 
-Possible implementation details to decide during deployment:
+Firebase platform configuration is project-specific. Generate it after the Firebase project exists. Never add service-account private keys or Google OAuth credentials to the Flutter project.
 
-- API Gateway authentication model.
-- Whether Cloud Run ingress should be restricted to the gateway.
-- Per-client/IP quotas and request limits.
-- Whether an additional application-level token/session mechanism is needed.
+## Demo / Product Model
+
+The app should let users experience the product before purchase without requiring account creation. The demo/purchase entitlement is separate from backend security: App Check protects the TTS backend and should not decide whether a user has purchased the full version.
 
 ## Secrets
 
