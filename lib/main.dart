@@ -895,12 +895,24 @@ Future<List<Map<String, dynamic>>> _fetchCityCategory(String category) async {
 Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
   final normalizedQuery = query.toLowerCase();
   final nightlifeTerms = [
-    'нощни заведения', 'нощно заведение', 'нощен клуб', 'нощни клубове',
-    'дискотека', 'дискотеки', 'барове', 'бар', 'пъб', 'pub', 'nightclub',
-    'night clubs', 'nightlife', 'clubs', 'nachtclub', 'kneipe',
+    'нощни заведения', 'нощи заведения', 'нощно заведение', 'нощен клуб',
+    'нощни клубове', 'дискотека', 'дискотеки', 'барове', 'бар', 'пъб',
+    'pub', 'nightclub', 'night clubs', 'nightlife', 'clubs', 'nachtclub', 'kneipe',
   ];
   if (nightlifeTerms.any(normalizedQuery.contains)) {
     final places = await _fetchNightlifePlaces();
+    if (places.isNotEmpty) return places;
+  }
+  final isHospital = normalizedQuery.contains('болница') ||
+      normalizedQuery.contains('hospital') || normalizedQuery.contains('krankenhaus') ||
+      normalizedQuery.contains('лечебно заведение');
+  final isPolice = normalizedQuery.contains('полицейски участък') ||
+      normalizedQuery.contains('police station') || normalizedQuery.contains('polizei');
+  final isFireStation = normalizedQuery.contains('пожарна служба') ||
+      normalizedQuery.contains('fire station') || normalizedQuery.contains('feuerwache');
+  if (isHospital || isPolice || isFireStation) {
+    final category = isHospital ? 'hospital' : isPolice ? 'police' : 'fire_station';
+    final places = await _fetchCityCategory(category);
     if (places.isNotEmpty) return places;
   }
   // Try Photon first. If it is unavailable, fall back to Nominatim.
