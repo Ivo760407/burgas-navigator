@@ -618,42 +618,100 @@ Future<void> _searchLocation() async {
 }
 
 Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
-  // Photon uses OpenStreetMap data and does not require a private API key.
-  final uri = Uri.https('photon.komoot.io', '/api/', {
-    'q': query,
-    'lat': '42.5048',
-    'lon': '27.4626',
-    'limit': '10',
-    'lang': language == 'bg' ? 'default' : language,
-  });
-  final response = await http.get(uri, headers: const {'Accept': 'application/json'})
-      .timeout(const Duration(seconds: 15));
-  if (response.statusCode != 200) {
-    throw const FormatException('Search service returned an error');
-  }
-  final data = jsonDecode(response.body) as Map<String, dynamic>;
-  final features = data['features'] as List<dynamic>? ?? const [];
-  return features.whereType<Map<String, dynamic>>().map((feature) {
-    final properties = feature['properties'] as Map<String, dynamic>? ?? {};
-    final geometry = feature['geometry'] as Map<String, dynamic>? ?? {};
-    final coordinates = geometry['coordinates'] as List<dynamic>? ?? const [];
-    if (coordinates.length < 2 || coordinates[0] is! num || coordinates[1] is! num) {
-      return <String, dynamic>{};
+  // Try Photon first. If it is unavailable, fall back to Nominatim.
+  // Neither provider requires a private API key.
+  Object? photonError;
+  try {
+    final uri = Uri.https('photon.komoot.io', '/api/', {
+      'q': query,
+      'lat': '42.5048',
+      'lon': '27.4626',
+      'limit': '10',
+      'lang': language == 'bg' ? 'default' : language,
+    });
+    final response = await http
+        .get(uri, headers: const {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw FormatException('Photon returned HTTP ${response.statusCode}');
     }
-    final name = (properties['name'] ?? properties['street'] ?? properties['city'] ?? query).toString();
-    final details = [
-      properties['street'],
-      properties['housenumber'],
-      properties['city'] ?? properties['locality'],
-    ].where((part) => part != null && part.toString().trim().isNotEmpty)
-        .map((part) => part.toString().trim()).toSet().join(', ');
-    return <String, dynamic>{
-      'name': name,
-      'details': details,
-      'latitude': (coordinates[1] as num).toDouble(),
-      'longitude': (coordinates[0] as num).toDouble(),
-    };
-  }).where((place) => place.isNotEmpty).toList();
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final features = data['features'] as List<dynamic>? ?? const [];
+    final places = features.whereType<Map<String, dynamic>>().map((feature) {
+      final properties = feature['properties'] as Map<String, dynamic>? ?? {};
+      final geometry = feature['geometry'] as Map<String, dynamic>? ?? {};
+      final coordinates = geometry['coordinates'] as List<dynamic>? ?? const [];
+      if (coordinates.length < 2 ||
+          coordinates[0] is! num ||
+          coordinates[1] is! num) {
+        return <String, dynamic>{};
+      }
+      final name = (properties['name'] ??
+              properties['street'] ??
+              properties['city'] ??
+              query)
+          .toString();
+      final details = [
+        properties['street'],
+        properties['housenumber'],
+        properties['city'] ?? properties['locality'],
+      ]
+          .where((part) => part != null && part.toString().trim().isNotEmpty)
+          .map((part) => part.toString().trim())
+          .toSet()
+          .join(', ');
+      return <String, dynamic>{
+        'name': name,
+        'details': details,
+        'latitude': (coordinates[1] as num).toDouble(),
+        'longitude': (coordinates[0] as num).toDouble(),
+      };
+    }).where((place) => place.isNotEmpty).toList();
+    if (places.isNotEmpty) return places;
+  } catch (error) {
+    photonError = error;
+  }
+
+  // Reserve Nominatim for fallback to avoid unnecessary requests.
+  final fallbackUri = Uri.https('nominatim.openstreetmap.org', '/search', {
+    'q': query,
+    'format': 'jsonv2',
+    'addressdetails': '1',
+    'limit': '10',
+    'accept-language': language == 'bg' ? 'bg' : language,
+  });
+  try {
+    final response = await http.get(fallbackUri, headers: const {
+      'Accept': 'application/json',
+      'User-Agent': 'BurgasNavigator/1.0 (Android city navigation app)',
+    }).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) {
+      throw FormatException('Nominatim returned HTTP ${response.statusCode}');
+    }
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.whereType<Map<String, dynamic>>().map((item) {
+      final address = item['address'] as Map<String, dynamic>? ?? {};
+      final displayName = (item['display_name'] ?? query).toString();
+      final name = (item['name'] ??
+              address['amenity'] ??
+              address['shop'] ??
+              address['tourism'] ??
+              address['road'] ??
+              address['suburb'] ??
+              displayName.split(',').first)
+          .toString();
+      return <String, dynamic>{
+        'name': name,
+        'details': displayName,
+        'latitude': double.tryParse(item['lat']?.toString() ?? '') ?? 0.0,
+        'longitude': double.tryParse(item['lon']?.toString() ?? '') ?? 0.0,
+      };
+    }).where((place) =>
+        (place['latitude'] as double) != 0.0 &&
+        (place['longitude'] as double) != 0.0).toList();
+  } catch (fallbackError) {
+    throw Exception('Search providers unavailable: $photonError; $fallbackError');
+  }
 }
 
 Future<void> _findPlaces(String query) async {
