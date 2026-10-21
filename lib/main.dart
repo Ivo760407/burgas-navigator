@@ -808,7 +808,7 @@ Future<List<Map<String, dynamic>>> _fetchNightlifePlaces() async {
 [out:json][timeout:18];
 area["name"~"^(Сливен|Sliven)$"]["boundary"="administrative"]["admin_level"~"^(8|9|10)$"]->.sliven;
 (
-  nwr(area.sliven)["amenity"~"^(bar|pub|nightclub|casino|stripclub)$"];
+  nwr(area.sliven)["amenity"~"^(bar|pub|nightclub|casino)$"];
   nwr(area.sliven)["club"~"^(nightclub|bar)$"];
 );
 out center tags;
