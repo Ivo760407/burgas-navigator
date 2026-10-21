@@ -198,6 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final AudioPlayer _cloudPlayer = AudioPlayer();
   final List<Map<String, dynamic>> _recentPlaces = [];
   final List<Map<String, dynamic>> _favoritePlaces = [];
+  Position? _searchOrigin;
   static const String _cloudTtsUrl = String.fromEnvironment('CLOUD_TTS_URL');
 
   @override
@@ -814,7 +815,31 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
   }
 }
 
+Future<void> _refreshSearchOrigin() async {
+  try {
+    if (!await Geolocator.isLocationServiceEnabled()) return;
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      _searchOrigin = null;
+      return;
+    }
+    _searchOrigin = await Geolocator.getLastKnownPosition() ??
+        await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+  } catch (_) {
+    _searchOrigin = null;
+  }
+}
+
 Future<void> _findPlaces(String query) async {
+  await _refreshSearchOrigin();
   try {
     final places = await _fetchPlaces(query);
     if (!mounted) return;
@@ -843,6 +868,19 @@ Future<void> _searchCategory(String category) async {
     'bus_station': {'bg': 'автогара', 'en': 'bus station', 'de': 'Busbahnhof'},
     'fuel': {'bg': 'бензиностанция', 'en': 'fuel station', 'de': 'Tankstelle'},
     'playground': {'bg': 'детска площадка', 'en': 'playground', 'de': 'Spielplatz'},
+    'park': {'bg': 'парк', 'en': 'park', 'de': 'Park'},
+    'museum': {'bg': 'музей', 'en': 'museum', 'de': 'Museum'},
+    'attraction': {'bg': 'забележителност', 'en': 'tourist attraction', 'de': 'Sehenswürdigkeit'},
+    'cafe': {'bg': 'кафене', 'en': 'cafe', 'de': 'Café'},
+    'bakery': {'bg': 'пекарна', 'en': 'bakery', 'de': 'Bäckerei'},
+    'bank': {'bg': 'банка', 'en': 'bank', 'de': 'Bank'},
+    'dentist': {'bg': 'зъболекар', 'en': 'dentist', 'de': 'Zahnarzt'},
+    'veterinary': {'bg': 'ветеринарна клиника', 'en': 'veterinary clinic', 'de': 'Tierarzt'},
+    'ev_charging': {'bg': 'зарядна станция за електромобили', 'en': 'EV charging station', 'de': 'Ladestation für Elektroautos'},
+    'sports': {'bg': 'спортен център', 'en': 'sports centre', 'de': 'Sportzentrum'},
+    'library': {'bg': 'библиотека', 'en': 'library', 'de': 'Bibliothek'},
+    'cinema': {'bg': 'кино', 'en': 'cinema', 'de': 'Kino'},
+    'post_office': {'bg': 'поща', 'en': 'post office', 'de': 'Postamt'},
   };
   final searchTerm = terms[category]?[language] ?? category;
   final city = language == 'en'
@@ -856,19 +894,32 @@ Future<void> _searchCategory(String category) async {
   String _formatApproximateDistance(Map<String, dynamic> place) {
     final latitude = place['latitude'];
     final longitude = place['longitude'];
-    if (latitude is! num || longitude is! num) return '';
+    final origin = _searchOrigin;
+    if (latitude is! num || longitude is! num) {
+      return language == 'en'
+          ? 'Distance unavailable'
+          : language == 'de'
+              ? 'Entfernung nicht verfügbar'
+              : 'Разстоянието не е достъпно';
+    }
+    if (origin == null) {
+      return language == 'en'
+          ? 'Enable location to see distance'
+          : language == 'de'
+              ? 'Standort aktivieren, um die Entfernung zu sehen'
+              : 'Включи местоположението, за да видиш разстоянието';
+    }
     final kilometers = const Distance().as(
       LengthUnit.Kilometer,
-      const LatLng(42.5048, 27.4626),
+      LatLng(origin.latitude, origin.longitude),
       LatLng(latitude.toDouble(), longitude.toDouble()),
     );
     final distanceLabel = kilometers < 1
         ? '${(kilometers * 1000).round()} m'
         : '${kilometers.toStringAsFixed(1)} km';
-    final minutes = (kilometers / 4.5 * 60).round();
-    if (language == 'en') return 'About $distanceLabel from city centre · $minutes min walking';
-    if (language == 'de') return 'Ca. $distanceLabel vom Stadtzentrum · $minutes Min. zu Fuß';
-    return 'Около $distanceLabel от центъра · $minutes мин пеша';
+    if (language == 'en') return 'About $distanceLabel from your location (straight-line)';
+    if (language == 'de') return 'Ca. $distanceLabel von deinem Standort (Luftlinie)';
+    return 'Около $distanceLabel от твоето местоположение (по права линия)';
   }
 
 Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) async {
@@ -1283,6 +1334,19 @@ Future<void> _showSettings() async {
                   _CategoryButton(icon: Icons.directions_bus, title: language == 'en' ? 'Bus stations' : language == 'de' ? 'Busbahnhöfe' : 'Автогари', onPressed: () => _searchCategory('bus_station')),
                   _CategoryButton(icon: Icons.local_gas_station, title: language == 'en' ? 'Fuel stations' : language == 'de' ? 'Tankstellen' : 'Бензиностанции', onPressed: () => _searchCategory('fuel')),
                   _CategoryButton(icon: Icons.child_friendly, title: language == 'en' ? 'Playgrounds' : language == 'de' ? 'Spielplätze' : 'Детски площадки', onPressed: () => _searchCategory('playground')),
+                  _CategoryButton(icon: Icons.park, title: language == 'en' ? 'Parks' : language == 'de' ? 'Parks' : 'Паркове', onPressed: () => _searchCategory('park')),
+                  _CategoryButton(icon: Icons.museum, title: language == 'en' ? 'Museums' : language == 'de' ? 'Museen' : 'Музеи', onPressed: () => _searchCategory('museum')),
+                  _CategoryButton(icon: Icons.account_balance, title: language == 'en' ? 'Attractions' : language == 'de' ? 'Sehenswürdigkeiten' : 'Забележителности', onPressed: () => _searchCategory('attraction')),
+                  _CategoryButton(icon: Icons.local_cafe, title: language == 'en' ? 'Cafés' : language == 'de' ? 'Cafés' : 'Кафенета', onPressed: () => _searchCategory('cafe')),
+                  _CategoryButton(icon: Icons.bakery_dining, title: language == 'en' ? 'Bakeries' : language == 'de' ? 'Bäckereien' : 'Пекарни', onPressed: () => _searchCategory('bakery')),
+                  _CategoryButton(icon: Icons.account_balance_wallet, title: language == 'en' ? 'Banks' : language == 'de' ? 'Banken' : 'Банки', onPressed: () => _searchCategory('bank')),
+                  _CategoryButton(icon: Icons.medical_services, title: language == 'en' ? 'Dentists' : language == 'de' ? 'Zahnärzte' : 'Зъболекари', onPressed: () => _searchCategory('dentist')),
+                  _CategoryButton(icon: Icons.pets, title: language == 'en' ? 'Veterinarians' : language == 'de' ? 'Tierärzte' : 'Ветеринари', onPressed: () => _searchCategory('veterinary')),
+                  _CategoryButton(icon: Icons.ev_station, title: language == 'en' ? 'EV charging' : language == 'de' ? 'E-Ladestationen' : 'Зарядни станции', onPressed: () => _searchCategory('ev_charging')),
+                  _CategoryButton(icon: Icons.fitness_center, title: language == 'en' ? 'Sports centres' : language == 'de' ? 'Sportzentren' : 'Спортни центрове', onPressed: () => _searchCategory('sports')),
+                  _CategoryButton(icon: Icons.local_library, title: language == 'en' ? 'Libraries' : language == 'de' ? 'Bibliotheken' : 'Библиотеки', onPressed: () => _searchCategory('library')),
+                  _CategoryButton(icon: Icons.movie, title: language == 'en' ? 'Cinemas' : language == 'de' ? 'Kinos' : 'Кина', onPressed: () => _searchCategory('cinema')),
+                  _CategoryButton(icon: Icons.local_post_office, title: language == 'en' ? 'Post offices' : language == 'de' ? 'Postämter' : 'Пощи', onPressed: () => _searchCategory('post_office')),
                 ],
               ),
 
