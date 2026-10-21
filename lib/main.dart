@@ -807,9 +807,9 @@ Future<List<Map<String, dynamic>>> _fetchNightlifePlaces() async {
   const overpassQuery = r"""
 [out:json][timeout:25];
 (
-  nwr(42.640,26.250,42.720,26.390)["amenity"~"^(bar|pub|nightclub|casino)$"];
-  nwr(42.640,26.250,42.720,26.390)["club"~"^(nightclub|bar)$"];
-  nwr(42.640,26.250,42.720,26.390)["leisure"="dance"];
+  nwr(42.650,26.270,42.715,26.375)["amenity"~"^(bar|pub|nightclub|casino)$"];
+  nwr(42.650,26.270,42.715,26.375)["club"~"^(nightclub|bar)$"];
+  nwr(42.650,26.270,42.715,26.375)["leisure"="dance"];
 );
 out center tags;
 """;
@@ -852,7 +852,7 @@ out center tags;
 }
 
 Future<List<Map<String, dynamic>>> _fetchCityCategory(String category) async {
-  const bounds = '(42.640,26.250,42.720,26.390)';
+  const bounds = '(42.650,26.270,42.715,26.375)';
   final tags = category == 'hospital'
       ? 'nwr$bounds["amenity"~"^(hospital|clinic|doctors)\$"]; nwr$bounds["healthcare"~"^(hospital|clinic|doctor|centre|health_centre|medical_centre|urgent_care)\$"];'
       : category == 'police'
@@ -900,8 +900,13 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
     'pub', 'nightclub', 'night clubs', 'nightlife', 'clubs', 'nachtclub', 'kneipe',
   ];
   if (nightlifeTerms.any(normalizedQuery.contains)) {
-    final places = await _fetchNightlifePlaces();
-    if (places.isNotEmpty) return places;
+    // Overpass can temporarily rate-limit or time out. Continue to geocoders.
+    try {
+      final places = await _fetchNightlifePlaces();
+      if (places.isNotEmpty) return places;
+    } catch (_) {
+      // Fall through to Photon/Nominatim.
+    }
   }
   final isHospital = normalizedQuery.contains('болница') ||
       normalizedQuery.contains('hospital') || normalizedQuery.contains('krankenhaus') ||
@@ -912,8 +917,13 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
       normalizedQuery.contains('fire station') || normalizedQuery.contains('feuerwache');
   if (isHospital || isPolice || isFireStation) {
     final category = isHospital ? 'hospital' : isPolice ? 'police' : 'fire_station';
-    final places = await _fetchCityCategory(category);
-    if (places.isNotEmpty) return places;
+    // A temporary Overpass error must not disable emergency search.
+    try {
+      final places = await _fetchCityCategory(category);
+      if (places.isNotEmpty) return places;
+    } catch (_) {
+      // Fall back to Photon/Nominatim below.
+    }
   }
   // Try Photon first. If it is unavailable, fall back to Nominatim.
   // Neither provider requires a private API key.
@@ -936,12 +946,17 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
     final features = data['features'] as List<dynamic>? ?? const [];
     final places = features.whereType<Map<String, dynamic>>()
       .where((feature) {
-        final properties = feature['properties'] as Map<String, dynamic>? ?? {};
-        final locality = (properties['city'] ?? properties['locality'] ?? '')
-            .toString().trim().toLowerCase();
-        // Strict city-only search: never accept results merely because they
-        // belong to Sliven municipality; nearby villages must be excluded.
-        return locality == 'сливен' || locality == 'sliven';
+        // Geocoders often omit city/locality for individual POIs.
+        // Use the Sliven urban bounding box instead of dropping those results.
+        final geometry = feature['geometry'] as Map<String, dynamic>? ?? {};
+        final coordinates = geometry['coordinates'] as List<dynamic>? ?? const [];
+        if (coordinates.length < 2 || coordinates[0] is! num || coordinates[1] is! num) {
+          return false;
+        }
+        final longitude = (coordinates[0] as num).toDouble();
+        final latitude = (coordinates[1] as num).toDouble();
+        return latitude >= 42.650 && latitude <= 42.715 &&
+            longitude >= 26.270 && longitude <= 26.375;
       })
       .map((feature) {
       final properties = feature['properties'] as Map<String, dynamic>? ?? {};
@@ -998,10 +1013,12 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
     // Accept only explicit city/town address matches; municipality membership
     // alone would incorrectly include nearby villages.
     return data.whereType<Map<String, dynamic>>().where((item) {
-      final address = item['address'] as Map<String, dynamic>? ?? {};
-      final locality = (address['city'] ?? address['town'] ?? '')
-          .toString().trim().toLowerCase();
-      return locality == 'сливен' || locality == 'sliven';
+      // Use the same city-area filter as Photon; missing locality metadata
+      // should not discard valid places inside Sliven.
+      final latitude = double.tryParse(item['lat']?.toString() ?? '') ?? 0.0;
+      final longitude = double.tryParse(item['lon']?.toString() ?? '') ?? 0.0;
+      return latitude >= 42.650 && latitude <= 42.715 &&
+          longitude >= 26.270 && longitude <= 26.375;
     }).map((item) {
       final address = item['address'] as Map<String, dynamic>? ?? {};
       final displayName = (item['display_name'] ?? query).toString();
