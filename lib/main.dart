@@ -599,8 +599,10 @@ Future<void> _searchLocation() async {
       ),
     ),
   );
-  await speech.stop();
-  await speech.cancel();
+  if (speechAvailable) {
+    await speech.stop();
+    await speech.cancel();
+  }
   controller.dispose();
   if (!mounted || query == null || query.trim().isEmpty) return;
   await _findPlaces(query.trim());
@@ -661,7 +663,13 @@ Future<void> _findPlaces(String query) async {
 }
 
 Future<void> _searchCategory(String category) async {
-  await _findPlaces('$category Burgas Bulgaria');
+  final searchTerm = language == 'en'
+      ? category
+      : language == 'de'
+          ? (category == 'restaurant' ? 'Restaurant' : category == 'hotel' ? 'Hotel' : category == 'beach' ? 'Strand' : 'Parkplatz')
+          : (category == 'restaurant' ? 'ресторант' : category == 'hotel' ? 'хотел' : category == 'beach' ? 'плаж' : 'паркинг');
+  final city = language == 'en' ? 'Burgas Bulgaria' : language == 'de' ? 'Burgas Bulgarien' : 'Бургас България';
+  await _findPlaces('$searchTerm $city');
 }
 
 Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) async {
