@@ -1017,10 +1017,10 @@ Future<void> _showSettings() async {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  _CategoryButton(icon: Icons.restaurant, title: 'Ресторанти', onPressed: () => _searchCategory('restaurant')),
-                  _CategoryButton(icon: Icons.hotel, title: 'Хотели', onPressed: () => _searchCategory('hotel')),
-                  _CategoryButton(icon: Icons.beach_access, title: 'Плажове', onPressed: () => _searchCategory('beach')),
-                  _CategoryButton(icon: Icons.local_parking, title: 'Паркинги', onPressed: () => _searchCategory('parking')),
+                  _CategoryButton(icon: Icons.restaurant, title: language == 'en' ? 'Restaurants' : language == 'de' ? 'Restaurants' : 'Ресторанти', onPressed: () => _searchCategory('restaurant')),
+                  _CategoryButton(icon: Icons.hotel, title: language == 'en' ? 'Hotels' : language == 'de' ? 'Hotels' : 'Хотели', onPressed: () => _searchCategory('hotel')),
+                  _CategoryButton(icon: Icons.beach_access, title: language == 'en' ? 'Beaches' : language == 'de' ? 'Strände' : 'Плажове', onPressed: () => _searchCategory('beach')),
+                  _CategoryButton(icon: Icons.local_parking, title: language == 'en' ? 'Parking' : language == 'de' ? 'Parkplätze' : 'Паркинги', onPressed: () => _searchCategory('parking')),
                 ],
               ),
 
