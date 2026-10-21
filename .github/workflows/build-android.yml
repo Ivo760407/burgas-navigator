@@ -31,7 +31,9 @@ jobs:
         run: flutter analyze
 
       - name: Build release APK
-        run: flutter build apk --release
+        env:
+          CLOUD_TTS_URL: ${{ vars.CLOUD_TTS_URL }}
+        run: flutter build apk --release --dart-define="CLOUD_TTS_URL=$CLOUD_TTS_URL"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
