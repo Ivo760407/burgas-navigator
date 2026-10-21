@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -505,31 +506,101 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 Future<void> _searchLocation() async {
   final controller = TextEditingController();
+  final speech = stt.SpeechToText();
+  var isListening = false;
+  var speechAvailable = false;
   final query = await showDialog<String>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(language == 'en' ? 'Where do you want to go?' : language == 'de' ? 'Wohin möchtest du gehen?' : 'Къде искаш да отидеш?'),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: language == 'en' ? 'Enter an address or place' : language == 'de' ? 'Adresse oder Ort eingeben' : 'Въведи адрес или място',
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: Text(language == 'en' ? 'Where do you want to go?' : language == 'de' ? 'Wohin möchtest du gehen?' : 'Къде искаш да отидеш?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: language == 'en' ? 'Enter an address or place' : language == 'de' ? 'Adresse oder Ort eingeben' : 'Въведи адрес или място',
+              ),
+              onSubmitted: (value) => Navigator.pop(dialogContext, value),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                IconButton.filledTonal(
+                  tooltip: language == 'en' ? 'Speak your destination' : language == 'de' ? 'Ziel sprechen' : 'Кажи дестинацията',
+                  onPressed: () async {
+                    if (isListening) {
+                      await speech.stop();
+                      setDialogState(() => isListening = false);
+                      return;
+                    }
+                    speechAvailable = await speech.initialize(
+                      onStatus: (status) {
+                        if (status == 'notListening' && dialogContext.mounted) {
+                          setDialogState(() => isListening = false);
+                        }
+                      },
+                      onError: (_) {
+                        if (dialogContext.mounted) setDialogState(() => isListening = false);
+                      },
+                    );
+                    if (!speechAvailable) {
+                      if (dialogContext.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(language == 'en'
+                              ? 'Speech recognition is unavailable on this device.'
+                              : language == 'de'
+                                  ? 'Spracherkennung ist auf diesem Gerät nicht verfügbar.'
+                                  : 'Гласовото разпознаване не е достъпно на това устройство.'),
+                        ));
+                      }
+                      return;
+                    }
+                    setDialogState(() => isListening = true);
+                    await speech.listen(
+                      localeId: language == 'en' ? 'en_US' : language == 'de' ? 'de_DE' : 'bg_BG',
+                      onResult: (result) {
+                        controller.text = result.recognizedWords;
+                        controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                        if (result.finalResult && dialogContext.mounted) {
+                          setDialogState(() => isListening = false);
+                        }
+                      },
+                    );
+                  },
+                  icon: Icon(isListening ? Icons.stop : Icons.mic),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isListening
+                        ? (language == 'en' ? 'Listening…' : language == 'de' ? 'Höre zu…' : 'Слушам…')
+                        : (language == 'en' ? 'Tap the microphone to speak' : language == 'de' ? 'Tippe auf das Mikrofon' : 'Натисни микрофона, за да говориш'),
+                    style: Theme.of(dialogContext).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        onSubmitted: (value) => Navigator.pop(dialogContext, value),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(language == 'en' ? 'Cancel' : language == 'de' ? 'Abbrechen' : 'Отказ'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(language == 'en' ? 'Search' : language == 'de' ? 'Suchen' : 'Търси'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext),
-          child: Text(language == 'en' ? 'Cancel' : language == 'de' ? 'Abbrechen' : 'Отказ'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(dialogContext, controller.text),
-          child: Text(language == 'en' ? 'Search' : language == 'de' ? 'Suchen' : 'Търси'),
-        ),
-      ],
     ),
   );
+  await speech.stop();
+  await speech.cancel();
   controller.dispose();
   if (!mounted || query == null || query.trim().isEmpty) return;
   await _findPlaces(query.trim());
