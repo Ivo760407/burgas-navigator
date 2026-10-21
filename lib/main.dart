@@ -851,6 +851,47 @@ out center tags;
     seen.add('${place['latitude']},${place['longitude']}')).toList();
 }
 
+Future<List<Map<String, dynamic>>> _fetchCityCategory(String category) async {
+  const bounds = '(42.640,26.250,42.720,26.390)';
+  final tags = category == 'hospital'
+      ? 'nwr$bounds["amenity"~"^(hospital|clinic|doctors)$"]; nwr$bounds["healthcare"~"^(hospital|clinic|doctor|centre|health_centre|medical_centre|urgent_care)$"];'
+      : category == 'police'
+          ? 'nwr$bounds["amenity"="police"];'
+          : 'nwr$bounds["amenity"="fire_station"];';
+  final query = '[out:json][timeout:25];($tags);out center tags;';
+  final uri = Uri.https('overpass-api.de', '/api/interpreter', {'data': query});
+  final response = await http.get(uri, headers: const {
+    'Accept': 'application/json',
+    'User-Agent': 'BurgasNavigator/1.0 (free city navigation app)',
+  }).timeout(const Duration(seconds: 28));
+  if (response.statusCode != 200) throw FormatException('Overpass HTTP ${response.statusCode}');
+  final data = jsonDecode(response.body) as Map<String, dynamic>;
+  final elements = data['elements'] as List<dynamic>? ?? const [];
+  final places = <Map<String, dynamic>>[];
+  final seen = <String>{};
+  for (final raw in elements) {
+    if (raw is! Map<String, dynamic>) continue;
+    final t = raw['tags'] as Map<String, dynamic>? ?? const {};
+    final lat = raw['lat'] ?? (raw['center'] as Map<String, dynamic>?)?['lat'];
+    final lon = raw['lon'] ?? (raw['center'] as Map<String, dynamic>?)?['lon'];
+    if (lat is! num || lon is! num) continue;
+    if (!seen.add('${lat.toDouble()},${lon.toDouble()}')) continue;
+    final fallback = category == 'hospital'
+        ? (language == 'en' ? 'Medical facility' : language == 'de' ? 'Medizinische Einrichtung' : 'Лечебно заведение')
+        : category == 'police'
+            ? (language == 'en' ? 'Police station' : language == 'de' ? 'Polizeidienststelle' : 'Полицейски участък')
+            : (language == 'en' ? 'Fire station' : language == 'de' ? 'Feuerwehr' : 'Пожарна служба');
+    final address = [t['addr:street'], t['addr:housenumber'], language == 'en' ? 'Sliven' : 'Сливен']
+        .where((v) => v != null && v.toString().isNotEmpty).join(', ');
+    places.add({
+      'name': (t['name'] ?? t['operator'] ?? t['brand'] ?? fallback).toString(),
+      'details': address, 'latitude': lat.toDouble(), 'longitude': lon.toDouble(),
+    });
+  }
+  places.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+  return places;
+}
+
 Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
   final normalizedQuery = query.toLowerCase();
   final nightlifeTerms = [
