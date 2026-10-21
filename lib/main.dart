@@ -251,10 +251,12 @@ class _HomeScreenState extends State<HomeScreen> {
             if (name.contains('natural')) value += 3;
             if (name.contains('wavenet')) value += 2;
             if (name.contains('local')) value -= 2;
-            final quality = int.tryParse('\${voice['quality'] ?? ''}');
+            final qualityValue = voice['quality'];
+            final quality = qualityValue is num ? qualityValue.toInt() : int.tryParse(qualityValue?.toString() ?? '');
             if (quality != null) value += quality ~/ 100;
             if (voice['networkConnectionRequired'] == true) value += 1;
-            final latency = int.tryParse('\${voice['latency'] ?? ''}');
+            final latencyValue = voice['latency'];
+            final latency = latencyValue is num ? latencyValue.toInt() : int.tryParse(latencyValue?.toString() ?? '');
             if (latency != null && latency > 0 && latency <= 200) value += 1;
             return value;
           }
