@@ -3,14 +3,15 @@ import { GoogleAuth } from 'google-auth-library';
 
 const port = Number(process.env.PORT || 8080);
 const maxTextLength = 300;
+const maxBodyBytes = 16 * 1024;
 const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],
 });
 
 const voices = {
-  bg: 'bg-BG-Chirp3-HD-Achernar',
-  en: 'en-US-Chirp3-HD-Achernar',
-  de: 'de-DE-Chirp3-HD-Achernar',
+  bg: 'bg-BG-Chirp3-HD-Aoede',
+  en: 'en-US-Chirp3-HD-Aoede',
+  de: 'de-DE-Chirp3-HD-Aoede',
 };
 
 const languageCodes = {
@@ -29,10 +30,25 @@ function sendJson(res, status, body) {
 
 async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let bytes = 0;
+  for await (const chunk of req) {
+    bytes += chunk.length;
+    if (bytes > maxBodyBytes) {
+      const error = new Error('Request body too large');
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
   const raw = Buffer.concat(chunks).toString('utf8');
   if (!raw) return {};
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const error = new Error('Invalid JSON');
+    error.statusCode = 400;
+    throw error;
+  }
 }
 
 async function synthesize(text, language) {
@@ -59,12 +75,13 @@ async function synthesize(text, language) {
           languageCode: languageCodes[language],
           name: voices[language],
         },
+        // Chirp 3 HD controls its own prosody and does not support
+        // speakingRate or pitch in audioConfig.
         audioConfig: {
           audioEncoding: 'MP3',
-          speakingRate: 0.95,
-          pitch: 0,
         },
       }),
+      signal: AbortSignal.timeout(15000),
     },
   );
 
@@ -111,7 +128,16 @@ const server = http.createServer(async (req, res) => {
     return res.end(audio);
   } catch (error) {
     console.error(error);
-    return sendJson(res, 502, { error: 'Cloud TTS request failed.' });
+    const statusCode = error?.statusCode === 400 || error?.statusCode === 413
+      ? error.statusCode
+      : 502;
+    return sendJson(res, statusCode, {
+      error: statusCode === 400
+        ? 'Invalid JSON request.'
+        : statusCode === 413
+          ? 'Request body too large.'
+          : 'Cloud TTS request failed.',
+    });
   }
 });
 
