@@ -854,10 +854,10 @@ out center tags;
 Future<List<Map<String, dynamic>>> _fetchCityCategory(String category) async {
   const bounds = '(42.640,26.250,42.720,26.390)';
   final tags = category == 'hospital'
-      ? 'nwr$bounds["amenity"~"^(hospital|clinic|doctors)$"]; nwr$bounds["healthcare"~"^(hospital|clinic|doctor|centre|health_centre|medical_centre|urgent_care)$"];'
+      ? 'nwr${bounds}["amenity"~"^(hospital|clinic|doctors)$"]; nwr${bounds}["healthcare"~"^(hospital|clinic|doctor|centre|health_centre|medical_centre|urgent_care)$"];'
       : category == 'police'
-          ? 'nwr$bounds["amenity"="police"];'
-          : 'nwr$bounds["amenity"="fire_station"];';
+          ? 'nwr${bounds}["amenity"="police"];'
+          : 'nwr${bounds}["amenity"="fire_station"];';
   final query = '[out:json][timeout:25];($tags);out center tags;';
   final uri = Uri.https('overpass-api.de', '/api/interpreter', {'data': query});
   final response = await http.get(uri, headers: const {
