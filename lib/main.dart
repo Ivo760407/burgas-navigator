@@ -262,11 +262,93 @@ class _HomeScreenState extends State<HomeScreen> {
               : 'Липсват координати за мястото.');
       return;
     }
-    final uri = Uri.https('www.google.com', '/maps/dir/', {
+
+    final mode = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(language == 'en'
+            ? 'Choose how to travel'
+            : language == 'de'
+                ? 'Fortbewegungsart wählen'
+                : 'Избери начин на придвижване'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.directions_walk),
+              title: Text(language == 'en' ? 'Walking' : language == 'de' ? 'Zu Fuß' : 'Пеша'),
+              onTap: () => Navigator.pop(dialogContext, 'walking'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_car),
+              title: Text(language == 'en' ? 'Car' : language == 'de' ? 'Auto' : 'С автомобил'),
+              onTap: () => Navigator.pop(dialogContext, 'driving'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_bike),
+              title: Text(language == 'en' ? 'Bicycle' : language == 'de' ? 'Fahrrad' : 'С велосипед'),
+              onTap: () => Navigator.pop(dialogContext, 'bicycling'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_transit),
+              title: Text(language == 'en' ? 'Public transport' : language == 'de' ? 'Öffentliche Verkehrsmittel' : 'Обществен транспорт'),
+              onTap: () => Navigator.pop(dialogContext, 'transit'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mode == null || !mounted) return;
+
+    var avoidStairs = false;
+    if (mode == 'walking') {
+      final question = language == 'en'
+          ? 'Would you like a walking route with or without stairs? Google Maps may not honor stair avoidance on every route, so please check the route before starting.'
+          : language == 'de'
+              ? 'Möchtest du eine Fußroute mit oder ohne Treppen? Google Maps berücksichtigt die Treppenvermeidung möglicherweise nicht bei jeder Route. Bitte prüfe die Route vor dem Start.'
+              : 'Предпочиташ ли пешеходен маршрут със или без стълби? Google Maps може да не спази избягването на стълби при всеки маршрут, затова провери маршрута преди тръгване.';
+      await _speak(question);
+      if (!mounted) return;
+      final stairsChoice = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(language == 'en'
+              ? 'Stairs on the route?'
+              : language == 'de'
+                  ? 'Treppen auf der Route?'
+                  : 'Стълби по маршрута?'),
+          content: Text(question),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(language == 'en' ? 'With stairs' : language == 'de' ? 'Mit Treppen' : 'Със стълби'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(language == 'en' ? 'Without stairs' : language == 'de' ? 'Ohne Treppen' : 'Без стълби'),
+            ),
+          ],
+        ),
+      );
+      if (stairsChoice == null || !mounted) return;
+      avoidStairs = stairsChoice;
+    }
+
+    final parameters = <String, String>{
       'api': '1',
       'destination': '$latitude,$longitude',
-      'travelmode': 'walking',
-    });
+      'travelmode': mode,
+    };
+    final origin = _searchOrigin;
+    if (origin != null) {
+      parameters['origin'] = '${origin.latitude},${origin.longitude}';
+    }
+    // Google Maps may ignore this extra preference; the dialog warns users
+    // to verify the route before starting.
+    if (mode == 'walking' && avoidStairs) {
+      parameters['avoid'] = 'stairs';
+    }
+    final uri = Uri.https('www.google.com', '/maps/dir/', parameters);
     try {
       final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched && mounted) {
@@ -286,7 +368,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-
   Future<void> _toggleFavorite(Map<String, dynamic> place) async {
     setState(() {
       if (_isFavorite(place)) {
@@ -947,8 +1028,7 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
                     leading: const Icon(Icons.place_outlined),
                     title: Text(place['name'] as String),
                     subtitle: Text(
-                      ((place['details'] as String).isEmpty ? query : place['details'] as String) +
-                          '\n' + _formatApproximateDistance(place),
+                      ('${(place['details'] as String).isEmpty ? query : place['details'] as String}\n${_formatApproximateDistance(place)}'),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
