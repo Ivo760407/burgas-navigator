@@ -806,8 +806,8 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
   try {
     final uri = Uri.https('photon.komoot.io', '/api/', {
       'q': query,
-      'lat': '42.5048',
-      'lon': '27.4626',
+      'lat': (_searchOrigin?.latitude ?? 42.6817).toString(),
+      'lon': (_searchOrigin?.longitude ?? 26.3225).toString(),
       'limit': '10',
       'lang': language == 'bg' ? 'default' : language,
     });
@@ -965,10 +965,10 @@ Future<void> _searchCategory(String category) async {
   };
   final searchTerm = terms[category]?[language] ?? category;
   final city = language == 'en'
-      ? 'Burgas Bulgaria'
+      ? 'Sliven Bulgaria'
       : language == 'de'
-          ? 'Burgas Bulgarien'
-          : 'Бургас България';
+          ? 'Sliven Bulgarien'
+          : 'Сливен България';
   await _findPlaces('$searchTerm $city');
 }
 
@@ -1091,10 +1091,10 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
 void _openCityMap() {
   Navigator.push(context, MaterialPageRoute(
     builder: (_) => LocationMapScreen(
-      latitude: 42.5048,
-      longitude: 27.4626,
+      latitude: 42.6817,
+      longitude: 26.3225,
       language: language,
-      placeName: language == 'en' ? 'Burgas' : language == 'de' ? 'Burgas' : 'Бургас',
+      placeName: language == 'en' ? 'Sliven' : language == 'de' ? 'Sliven' : 'Сливен',
     ),
   ));
 }
