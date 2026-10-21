@@ -805,11 +805,11 @@ Future<List<Map<String, dynamic>>> _fetchNightlifePlaces() async {
   // OpenStreetMap/Overpass is free and has dedicated tags for bars, pubs
   // and nightclubs; Photon is primarily a geocoder and often misses these POIs.
   const overpassQuery = r"""
-[out:json][timeout:18];
-area["name"~"^(Сливен|Sliven)$"]["boundary"="administrative"]["admin_level"~"^(8|9|10)$"]->.sliven;
+[out:json][timeout:25];
 (
-  nwr(area.sliven)["amenity"~"^(bar|pub|nightclub|casino)$"];
-  nwr(area.sliven)["club"~"^(nightclub|bar)$"];
+  nwr(42.640,26.250,42.720,26.390)["amenity"~"^(bar|pub|nightclub|casino)$"];
+  nwr(42.640,26.250,42.720,26.390)["club"~"^(nightclub|bar)$"];
+  nwr(42.640,26.250,42.720,26.390)["leisure"="dance"];
 );
 out center tags;
 """;
