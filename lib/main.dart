@@ -244,17 +244,22 @@ class _HomeScreenState extends State<HomeScreen> {
           final aName = (a['name'] ?? '').toString().toLowerCase();
           final bName = (b['name'] ?? '').toString().toLowerCase();
 
-          int score(String name) {
+          int score(Map voice, String name) {
             var value = 0;
             if (name.contains('network')) value += 3;
             if (name.contains('neural')) value += 3;
             if (name.contains('natural')) value += 3;
             if (name.contains('wavenet')) value += 2;
             if (name.contains('local')) value -= 2;
+            final quality = int.tryParse('\${voice['quality'] ?? ''}');
+            if (quality != null) value += quality ~/ 100;
+            if (voice['networkConnectionRequired'] == true) value += 1;
+            final latency = int.tryParse('\${voice['latency'] ?? ''}');
+            if (latency != null && latency > 0 && latency <= 200) value += 1;
             return value;
           }
 
-          return score(bName).compareTo(score(aName));
+          return score(b, bName).compareTo(score(a, aName));
         });
 
         final selected = matching.first;
