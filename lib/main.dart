@@ -853,6 +853,24 @@ Future<void> _searchCategory(String category) async {
   await _findPlaces('$searchTerm $city');
 }
 
+  String _formatApproximateDistance(Map<String, dynamic> place) {
+    final latitude = place['latitude'];
+    final longitude = place['longitude'];
+    if (latitude is! num || longitude is! num) return '';
+    final kilometers = const Distance().as(
+      LengthUnit.Kilometer,
+      const LatLng(42.5048, 27.4626),
+      LatLng(latitude.toDouble(), longitude.toDouble()),
+    );
+    final distanceLabel = kilometers < 1
+        ? '${(kilometers * 1000).round()} m'
+        : '${kilometers.toStringAsFixed(1)} km';
+    final minutes = (kilometers / 4.5 * 60).round();
+    if (language == 'en') return 'About $distanceLabel from city centre · $minutes min walking';
+    if (language == 'de') return 'Ca. $distanceLabel vom Stadtzentrum · $minutes Min. zu Fuß';
+    return 'Около $distanceLabel от центъра · $minutes мин пеша';
+  }
+
 Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) async {
   final selected = await showModalBottomSheet<Map<String, dynamic>>(
     context: context,
@@ -877,7 +895,12 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
                   return ListTile(
                     leading: const Icon(Icons.place_outlined),
                     title: Text(place['name'] as String),
-                    subtitle: Text((place['details'] as String).isEmpty ? query : place['details'] as String),
+                    subtitle: Text(
+                      ((place['details'] as String).isEmpty ? query : place['details'] as String) +
+                          '\n' + _formatApproximateDistance(place),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
