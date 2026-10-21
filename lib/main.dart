@@ -804,7 +804,7 @@ Future<List<Map<String, dynamic>>> _fetchNightlifePlaces() async {
   // and nightclubs; Photon is primarily a geocoder and often misses these POIs.
   const overpassQuery = r"""
 [out:json][timeout:18];
-area["name"~"^(Сливен|Sliven)$"]["boundary"="administrative"]["admin_level"="10"]->.sliven;
+area["name"~"^(Сливен|Sliven)$"]["boundary"="administrative"]["admin_level"~"^(8|9|10)$"]->.sliven;
 (
   nwr(area.sliven)["amenity"~"^(bar|pub|nightclub|casino|stripclub)$"];
   nwr(area.sliven)["club"~"^(nightclub|bar)$"];
@@ -940,28 +940,8 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
       throw FormatException('Nominatim returned HTTP ${response.statusCode}');
     }
     final data = jsonDecode(response.body) as List<dynamic>;
-    return data.whereType<Map<String, dynamic>>().map((item) {
-      final address = item['address'] as Map<String, dynamic>? ?? {};
-      final displayName = (item['display_name'] ?? query).toString();
-      final name = (item['name'] ??
-              address['amenity'] ??
-              address['shop'] ??
-              address['tourism'] ??
-              address['road'] ??
-              address['suburb'] ??
-              displayName.split(',').first)
-          .toString();
-      return <String, dynamic>{
-        'name': name,
-        'details': displayName,
-        'latitude': double.tryParse(item['lat']?.toString() ?? '') ?? 0.0,
-        'longitude': double.tryParse(item['lon']?.toString() ?? '') ?? 0.0,
-      };
-    }).where((place) =>
-        (place['latitude'] as double) != 0.0 &&
-        (place['longitude'] as double) != 0.0).toList();
-    // Keep only results whose address explicitly identifies the city itself.
-    // A municipality name alone is intentionally insufficient.
+    // Accept only explicit city/town address matches; municipality membership
+    // alone would incorrectly include nearby villages.
     return data.whereType<Map<String, dynamic>>().where((item) {
       final address = item['address'] as Map<String, dynamic>? ?? {};
       final locality = (address['city'] ?? address['town'] ?? '')
