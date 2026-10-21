@@ -27,8 +27,10 @@ class BurgasNavigatorApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Arial',
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0077B6),
+          seedColor: const Color(0xFF42A5F5),
+          brightness: Brightness.light,
         ),
+        scaffoldBackgroundColor: const Color(0xFFF3FAFF),
       ),
       home: const LanguageScreen(),
     );
@@ -54,7 +56,7 @@ class LanguageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5FAFC),
+      backgroundColor: const Color(0xFFF3FAFF),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -1378,7 +1380,7 @@ Future<void> _showSettings() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5FAFC),
+      backgroundColor: const Color(0xFFF3FAFF),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
