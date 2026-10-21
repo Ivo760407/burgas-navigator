@@ -193,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late String language;
   final FlutterTts _tts = FlutterTts();
   final AudioPlayer _cloudPlayer = AudioPlayer();
+  final List<Map<String, dynamic>> _recentPlaces = [];
   static const String _cloudTtsUrl = String.fromEnvironment('CLOUD_TTS_URL');
 
   @override
@@ -230,7 +231,10 @@ class _HomeScreenState extends State<HomeScreen> {
           .where((voice) {
             final voiceLocale =
                 (voice['locale'] ?? '').toString().toLowerCase();
-            return voiceLocale == locale.toLowerCase();
+            final normalized = voiceLocale.replaceAll('_', '-');
+            final requested = locale.toLowerCase();
+            final languageCode = requested.split('-').first;
+            return normalized == requested || normalized.startsWith('$languageCode-') || normalized == languageCode;
           })
           .toList();
 
@@ -500,150 +504,189 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 Future<void> _searchLocation() async {
-  const apiKey = String.fromEnvironment('GEOAPIFY_API_KEY');
-
-  if (apiKey.isEmpty) {
-    _showMessage(
-      context,
-      language == 'en'
-          ? 'Geoapify API key is missing.'
-          : language == 'de'
-              ? 'Geoapify API-Schlüssel fehlt.'
-              : 'Geoapify API ключът липсва.',
-    );
-    return;
-  }
-
   final controller = TextEditingController();
-
   final query = await showDialog<String>(
     context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: Text(
-          language == 'en'
-              ? 'Where do you want to go?'
-              : language == 'de'
-                  ? 'Wohin möchtest du gehen?'
-                  : 'Къде искаш да отидеш?',
+    builder: (dialogContext) => AlertDialog(
+      title: Text(language == 'en' ? 'Where do you want to go?' : language == 'de' ? 'Wohin möchtest du gehen?' : 'Къде искаш да отидеш?'),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: language == 'en' ? 'Enter an address or place' : language == 'de' ? 'Adresse oder Ort eingeben' : 'Въведи адрес или място',
         ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: language == 'en'
-                ? 'Enter an address or place'
-                : language == 'de'
-                    ? 'Adresse oder Ort eingeben'
-                    : 'Въведи адрес или място',
-          ),
-          onSubmitted: (value) {
-            Navigator.pop(dialogContext, value);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
-              language == 'en'
-                  ? 'Cancel'
-                  : language == 'de'
-                      ? 'Abbrechen'
-                      : 'Отказ',
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, controller.text);
-            },
-            child: Text(
-              language == 'en'
-                  ? 'Search'
-                  : language == 'de'
-                      ? 'Suchen'
-                      : 'Търси',
-            ),
-          ),
-        ],
-      );
-    },
-  );
-
-  controller.dispose();
-
-  if (!mounted || query == null || query.trim().isEmpty) {
-    return;
-  }
-
-  final uri = Uri.https(
-    'api.geoapify.com',
-    '/v1/geocode/search',
-    {
-      'text': query.trim(),
-      'format': 'json',
-      'limit': '1',
-      'apiKey': apiKey,
-    },
-  );
-
-  try {
-    final response = await http.get(uri);
-
-    if (!mounted) return;
-
-    if (response.statusCode != 200) {
-      _showMessage(
-        context,
-        language == 'en'
-            ? 'Search failed.'
-            : language == 'de'
-                ? 'Suche fehlgeschlagen.'
-                : 'Търсенето неуспешно.',
-      );
-      return;
-    }
-
-    final data = jsonDecode(response.body);
-    final results = data['results'] as List<dynamic>;
-
-    if (results.isEmpty) {
-      _showMessage(
-        context,
-        language == 'en'
-            ? 'Location not found.'
-            : language == 'de'
-                ? 'Ort nicht gefunden.'
-                : 'Мястото не е намерено.',
-      );
-      return;
-    }
-
-    final result = results.first as Map<String, dynamic>;
-    final latitude = (result['lat'] as num).toDouble();
-    final longitude = (result['lon'] as num).toDouble();
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LocationMapScreen(
-          latitude: latitude,
-          longitude: longitude,
-          language: language,
-        ),
+        onSubmitted: (value) => Navigator.pop(dialogContext, value),
       ),
-    );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: Text(language == 'en' ? 'Cancel' : language == 'de' ? 'Abbrechen' : 'Отказ'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(dialogContext, controller.text),
+          child: Text(language == 'en' ? 'Search' : language == 'de' ? 'Suchen' : 'Търси'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  if (!mounted || query == null || query.trim().isEmpty) return;
+  await _findPlaces(query.trim());
+}
+
+Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
+  // Photon uses OpenStreetMap data and does not require a private API key.
+  final uri = Uri.https('photon.komoot.io', '/api/', {
+    'q': query,
+    'lat': '42.5048',
+    'lon': '27.4626',
+    'limit': '10',
+    'lang': language == 'bg' ? 'default' : language,
+  });
+  final response = await http.get(uri, headers: const {'Accept': 'application/json'})
+      .timeout(const Duration(seconds: 15));
+  if (response.statusCode != 200) {
+    throw const FormatException('Search service returned an error');
+  }
+  final data = jsonDecode(response.body) as Map<String, dynamic>;
+  final features = data['features'] as List<dynamic>? ?? const [];
+  return features.whereType<Map<String, dynamic>>().map((feature) {
+    final properties = feature['properties'] as Map<String, dynamic>? ?? {};
+    final geometry = feature['geometry'] as Map<String, dynamic>? ?? {};
+    final coordinates = geometry['coordinates'] as List<dynamic>? ?? const [];
+    if (coordinates.length < 2 || coordinates[0] is! num || coordinates[1] is! num) {
+      return <String, dynamic>{};
+    }
+    final name = (properties['name'] ?? properties['street'] ?? properties['city'] ?? query).toString();
+    final details = [
+      properties['street'],
+      properties['housenumber'],
+      properties['city'] ?? properties['locality'],
+    ].where((part) => part != null && part.toString().trim().isNotEmpty)
+        .map((part) => part.toString().trim()).toSet().join(', ');
+    return <String, dynamic>{
+      'name': name,
+      'details': details,
+      'latitude': (coordinates[1] as num).toDouble(),
+      'longitude': (coordinates[0] as num).toDouble(),
+    };
+  }).where((place) => place.isNotEmpty).toList();
+}
+
+Future<void> _findPlaces(String query) async {
+  try {
+    final places = await _fetchPlaces(query);
+    if (!mounted) return;
+    if (places.isEmpty) {
+      _showMessage(context, language == 'en' ? 'No matching places found.' : language == 'de' ? 'Keine passenden Orte gefunden.' : 'Не са намерени подходящи места.');
+      return;
+    }
+    await _showPlaceResults(places, query);
   } catch (_) {
     if (!mounted) return;
-
-    _showMessage(
-      context,
-      language == 'en'
-          ? 'Could not connect to the search service.'
-          : language == 'de'
-              ? 'Verbindung zum Suchdienst fehlgeschlagen.'
-              : 'Връзката с услугата за търсене неуспешна.',
-    );
+    _showMessage(context, language == 'en' ? 'Search is temporarily unavailable. Please try again.' : language == 'de' ? 'Die Suche ist vorübergehend nicht verfügbar. Bitte erneut versuchen.' : 'Търсенето временно не е достъпно. Опитай отново.');
   }
+}
+
+Future<void> _searchCategory(String category) async {
+  await _findPlaces('$category Burgas Bulgaria');
+}
+
+Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) async {
+  final selected = await showModalBottomSheet<Map<String, dynamic>>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(sheetContext).size.height * 0.65,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Text(language == 'en' ? 'Search results' : language == 'de' ? 'Suchergebnisse' : 'Резултати от търсенето', style: Theme.of(sheetContext).textTheme.titleLarge),
+            ),
+            Expanded(
+              child: ListView.separated(
+                itemCount: places.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final place = places[index];
+                  return ListTile(
+                    leading: const Icon(Icons.place_outlined),
+                    title: Text(place['name'] as String),
+                    subtitle: Text((place['details'] as String).isEmpty ? query : place['details'] as String),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pop(sheetContext, place),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (!mounted || selected == null) return;
+  final name = selected['name'] as String;
+  setState(() {
+    _recentPlaces.removeWhere((place) => place['name'] == name);
+    _recentPlaces.insert(0, Map<String, dynamic>.from(selected));
+    if (_recentPlaces.length > 20) _recentPlaces.removeLast();
+  });
+  Navigator.push(context, MaterialPageRoute(
+    builder: (_) => LocationMapScreen(
+      latitude: selected['latitude'] as double,
+      longitude: selected['longitude'] as double,
+      language: language,
+      placeName: name,
+    ),
+  ));
+}
+
+void _openCityMap() {
+  Navigator.push(context, MaterialPageRoute(
+    builder: (_) => LocationMapScreen(
+      latitude: 42.5048,
+      longitude: 27.4626,
+      language: language,
+      placeName: language == 'en' ? 'Burgas' : language == 'de' ? 'Burgas' : 'Бургас',
+    ),
+  ));
+}
+
+Future<void> _showFavorites() async {
+  if (_recentPlaces.isEmpty) {
+    _showMessage(context, language == 'en' ? 'Your recent places will appear here after a search.' : language == 'de' ? 'Hier erscheinen Orte nach deiner Suche.' : 'Тук ще се показват последните намерени места.');
+    return;
+  }
+  await _showPlaceResults(List<Map<String, dynamic>>.from(_recentPlaces), language == 'en' ? 'Recent places' : language == 'de' ? 'Zuletzt gesucht' : 'Последни места');
+}
+
+Future<void> _showSettings() async {
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(language == 'en' ? 'Settings' : language == 'de' ? 'Einstellungen' : 'Настройки'),
+      content: Text(language == 'en'
+          ? 'The spoken language follows the language selected on the main screen. Voice quality depends on the speech engine installed on your phone.'
+          : language == 'de'
+              ? 'Die Sprache folgt der Auswahl auf dem Hauptbildschirm. Die Sprachqualität hängt von der auf deinem Telefon installierten Sprachausgabe ab.'
+              : 'Говоримият език следва избора на главния екран. Качеството на гласа зависи от гласовия двигател, инсталиран на телефона.'),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(dialogContext);
+            _speak(language == 'en' ? 'Voice test. Your city assistant is ready.' : language == 'de' ? 'Sprachtest. Dein Stadtassistent ist bereit.' : 'Проба на гласа. Градският ти асистент е готов.');
+          },
+          child: Text(language == 'en' ? 'Test voice' : language == 'de' ? 'Stimme testen' : 'Пробвай гласа'),
+        ),
+        TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(language == 'en' ? 'Close' : language == 'de' ? 'Schließen' : 'Затвори')),
+      ],
+    ),
+  );
 }
   void _showLocationLoading() {
     showDialog<void>(
@@ -894,23 +937,11 @@ Future<void> _searchLocation() async {
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
-                children: const [
-                  _CategoryButton(
-                    icon: Icons.restaurant,
-                    title: 'Ресторанти',
-                  ),
-                  _CategoryButton(
-                    icon: Icons.hotel,
-                    title: 'Хотели',
-                  ),
-                  _CategoryButton(
-                    icon: Icons.beach_access,
-                    title: 'Плажове',
-                  ),
-                  _CategoryButton(
-                    icon: Icons.local_parking,
-                    title: 'Паркинги',
-                  ),
+                children: [
+                  _CategoryButton(icon: Icons.restaurant, title: 'Ресторанти', onPressed: () => _searchCategory('restaurant')),
+                  _CategoryButton(icon: Icons.hotel, title: 'Хотели', onPressed: () => _searchCategory('hotel')),
+                  _CategoryButton(icon: Icons.beach_access, title: 'Плажове', onPressed: () => _searchCategory('beach')),
+                  _CategoryButton(icon: Icons.local_parking, title: 'Паркинги', onPressed: () => _searchCategory('parking')),
                 ],
               ),
 
@@ -919,24 +950,15 @@ Future<void> _searchLocation() async {
               Row(
                 children: [
                   Expanded(
-                    child: _BottomButton(
-                      icon: Icons.map,
-                      title: 'Карта',
-                    ),
+                    child: _BottomButton(icon: Icons.map, title: 'Карта', onPressed: _openCityMap),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _BottomButton(
-                      icon: Icons.favorite_border,
-                      title: 'Любими',
-                    ),
+                    child: _BottomButton(icon: Icons.history, title: 'Последни', onPressed: _showFavorites),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _BottomButton(
-                      icon: Icons.settings,
-                      title: 'Настройки',
-                    ),
+                    child: _BottomButton(icon: Icons.settings, title: 'Настройки', onPressed: _showSettings),
                   ),
                 ],
               ),
@@ -1023,42 +1045,22 @@ class _MainButton extends StatelessWidget {
 class _CategoryButton extends StatelessWidget {
   final IconData icon;
   final String title;
+  final VoidCallback onPressed;
 
-  const _CategoryButton({
-    required this.icon,
-    required this.title,
-  });
+  const _CategoryButton({required this.icon, required this.title, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 9,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.black12,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 20,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20),
+      label: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0077B6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        side: const BorderSide(color: Colors.black12),
       ),
     );
   }
@@ -1071,34 +1073,29 @@ class _CategoryButton extends StatelessWidget {
 class _BottomButton extends StatelessWidget {
   final IconData icon;
   final String title;
+  final VoidCallback onPressed;
 
-  const _BottomButton({
-    required this.icon,
-    required this.title,
-  });
+  const _BottomButton({required this.icon, required this.title, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          vertical: 14,
-        ),
-        child: Column(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Column(
           children: [
             Icon(
               icon,
               size: 25,
             ),
             const SizedBox(height: 5),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 12,
-              ),
-            ),
+            Text(title, style: const TextStyle(fontSize: 12)),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1107,15 +1104,18 @@ class LocationMapScreen extends StatelessWidget {
   final double latitude;
   final double longitude;
   final String language;
+  final String? placeName;
 
   const LocationMapScreen({
     super.key,
     required this.latitude,
     required this.longitude,
     required this.language,
+    this.placeName,
   });
 
   String get title {
+    if (placeName != null && placeName!.trim().isNotEmpty) return placeName!;
     if (language == 'en') {
       return 'You are here';
     }
