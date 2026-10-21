@@ -879,7 +879,16 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final features = data['features'] as List<dynamic>? ?? const [];
-    final places = features.whereType<Map<String, dynamic>>().map((feature) {
+    final places = features.whereType<Map<String, dynamic>>()
+      .where((feature) {
+        final properties = feature['properties'] as Map<String, dynamic>? ?? {};
+        final locality = (properties['city'] ?? properties['locality'] ?? '')
+            .toString().trim().toLowerCase();
+        // Strict city-only search: never accept results merely because they
+        // belong to Sliven municipality; nearby villages must be excluded.
+        return locality == 'сливен' || locality == 'sliven';
+      })
+      .map((feature) {
       final properties = feature['properties'] as Map<String, dynamic>? ?? {};
       final geometry = feature['geometry'] as Map<String, dynamic>? ?? {};
       final coordinates = geometry['coordinates'] as List<dynamic>? ?? const [];
@@ -932,6 +941,33 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
     }
     final data = jsonDecode(response.body) as List<dynamic>;
     return data.whereType<Map<String, dynamic>>().map((item) {
+      final address = item['address'] as Map<String, dynamic>? ?? {};
+      final displayName = (item['display_name'] ?? query).toString();
+      final name = (item['name'] ??
+              address['amenity'] ??
+              address['shop'] ??
+              address['tourism'] ??
+              address['road'] ??
+              address['suburb'] ??
+              displayName.split(',').first)
+          .toString();
+      return <String, dynamic>{
+        'name': name,
+        'details': displayName,
+        'latitude': double.tryParse(item['lat']?.toString() ?? '') ?? 0.0,
+        'longitude': double.tryParse(item['lon']?.toString() ?? '') ?? 0.0,
+      };
+    }).where((place) =>
+        (place['latitude'] as double) != 0.0 &&
+        (place['longitude'] as double) != 0.0).toList();
+    // Keep only results whose address explicitly identifies the city itself.
+    // A municipality name alone is intentionally insufficient.
+    return data.whereType<Map<String, dynamic>>().where((item) {
+      final address = item['address'] as Map<String, dynamic>? ?? {};
+      final locality = (address['city'] ?? address['town'] ?? '')
+          .toString().trim().toLowerCase();
+      return locality == 'сливен' || locality == 'sliven';
+    }).map((item) {
       final address = item['address'] as Map<String, dynamic>? ?? {};
       final displayName = (item['display_name'] ?? query).toString();
       final name = (item['name'] ??
