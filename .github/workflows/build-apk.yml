@@ -30,8 +30,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Analyze
+        run: flutter analyze
+
       - name: Build smaller ABI-specific release APKs
-        run: flutter build apk --release --split-per-abi
+        env:
+          CLOUD_TTS_URL: ${{ vars.CLOUD_TTS_URL }}
+        run: flutter build apk --release --split-per-abi --dart-define="CLOUD_TTS_URL=$CLOUD_TTS_URL"
 
       - name: Upload APKs (short retention to conserve storage)
         uses: actions/upload-artifact@v4
