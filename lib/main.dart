@@ -9,6 +9,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const BurgasNavigatorApp());
@@ -208,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _placeKey(Map<String, dynamic> place) =>
-      place['latitude'].toString() + ',' + place['longitude'].toString();
+      '${place['latitude']},${place['longitude']}';
 
   Future<void> _loadSavedPlaces() async {
     try {
@@ -248,6 +249,42 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isFavorite(Map<String, dynamic> place) =>
       _favoritePlaces.any((saved) => _placeKey(saved) == _placeKey(place));
+
+  Future<void> _openNavigation(Map<String, dynamic> place) async {
+    final latitude = place['latitude'];
+    final longitude = place['longitude'];
+    if (latitude is! num || longitude is! num) {
+      _showMessage(context, language == 'en'
+          ? 'Location coordinates are unavailable.'
+          : language == 'de'
+              ? 'Standortkoordinaten sind nicht verfügbar.'
+              : 'Липсват координати за мястото.');
+      return;
+    }
+    final uri = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': '$latitude,$longitude',
+      'travelmode': 'walking',
+    });
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        _showMessage(context, language == 'en'
+            ? 'Could not open navigation.'
+            : language == 'de'
+                ? 'Navigation konnte nicht geöffnet werden.'
+                : 'Навигацията не може да бъде отворена.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage(context, language == 'en'
+            ? 'Could not open navigation.'
+            : language == 'de'
+                ? 'Navigation konnte nicht geöffnet werden.'
+                : 'Навигацията не може да бъде отворена.');
+      }
+    }
+  }
 
   Future<void> _toggleFavorite(Map<String, dynamic> place) async {
     setState(() {
@@ -830,6 +867,15 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          tooltip: language == 'en'
+                              ? 'Start navigation'
+                              : language == 'de'
+                                  ? 'Navigation starten'
+                                  : 'Навигация',
+                          onPressed: () => _openNavigation(place),
+                          icon: const Icon(Icons.directions),
+                        ),
                         IconButton(
                           tooltip: language == 'en'
                               ? 'Toggle favorite'
