@@ -36,10 +36,10 @@ jobs:
       - name: Build smaller ABI-specific release APKs
         run: flutter build apk --release --split-per-abi
 
-      - name: Upload APKs (short retention to conserve storage)
+      - name: Upload APKs (90-day retention)
         uses: actions/upload-artifact@v4
         with:
           name: burgas-navigator-apk
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 90
