@@ -830,12 +830,26 @@ Future<void> _findPlaces(String query) async {
 }
 
 Future<void> _searchCategory(String category) async {
-  final searchTerm = language == 'en'
-      ? category
+  const terms = <String, Map<String, String>>{
+    'restaurant': {'bg': 'ресторант', 'en': 'restaurant', 'de': 'Restaurant'},
+    'hotel': {'bg': 'хотел', 'en': 'hotel', 'de': 'Hotel'},
+    'beach': {'bg': 'плаж', 'en': 'beach', 'de': 'Strand'},
+    'parking': {'bg': 'паркинг', 'en': 'parking', 'de': 'Parkplatz'},
+    'pharmacy': {'bg': 'аптека', 'en': 'pharmacy', 'de': 'Apotheke'},
+    'hospital': {'bg': 'болница', 'en': 'hospital', 'de': 'Krankenhaus'},
+    'atm': {'bg': 'банкомат', 'en': 'ATM', 'de': 'Geldautomat'},
+    'supermarket': {'bg': 'супермаркет', 'en': 'supermarket', 'de': 'Supermarkt'},
+    'toilets': {'bg': 'обществена тоалетна', 'en': 'public toilet', 'de': 'öffentliche Toilette'},
+    'bus_station': {'bg': 'автогара', 'en': 'bus station', 'de': 'Busbahnhof'},
+    'fuel': {'bg': 'бензиностанция', 'en': 'fuel station', 'de': 'Tankstelle'},
+    'playground': {'bg': 'детска площадка', 'en': 'playground', 'de': 'Spielplatz'},
+  };
+  final searchTerm = terms[category]?[language] ?? category;
+  final city = language == 'en'
+      ? 'Burgas Bulgaria'
       : language == 'de'
-          ? (category == 'restaurant' ? 'Restaurant' : category == 'hotel' ? 'Hotel' : category == 'beach' ? 'Strand' : 'Parkplatz')
-          : (category == 'restaurant' ? 'ресторант' : category == 'hotel' ? 'хотел' : category == 'beach' ? 'плаж' : 'паркинг');
-  final city = language == 'en' ? 'Burgas Bulgaria' : language == 'de' ? 'Burgas Bulgarien' : 'Бургас България';
+          ? 'Burgas Bulgarien'
+          : 'Бургас България';
   await _findPlaces('$searchTerm $city');
 }
 
@@ -1238,6 +1252,14 @@ Future<void> _showSettings() async {
                   _CategoryButton(icon: Icons.hotel, title: language == 'en' ? 'Hotels' : language == 'de' ? 'Hotels' : 'Хотели', onPressed: () => _searchCategory('hotel')),
                   _CategoryButton(icon: Icons.beach_access, title: language == 'en' ? 'Beaches' : language == 'de' ? 'Strände' : 'Плажове', onPressed: () => _searchCategory('beach')),
                   _CategoryButton(icon: Icons.local_parking, title: language == 'en' ? 'Parking' : language == 'de' ? 'Parkplätze' : 'Паркинги', onPressed: () => _searchCategory('parking')),
+                  _CategoryButton(icon: Icons.local_pharmacy, title: language == 'en' ? 'Pharmacies' : language == 'de' ? 'Apotheken' : 'Аптеки', onPressed: () => _searchCategory('pharmacy')),
+                  _CategoryButton(icon: Icons.local_hospital, title: language == 'en' ? 'Hospitals' : language == 'de' ? 'Krankenhäuser' : 'Болници', onPressed: () => _searchCategory('hospital')),
+                  _CategoryButton(icon: Icons.atm, title: language == 'en' ? 'ATMs' : language == 'de' ? 'Geldautomaten' : 'Банкомати', onPressed: () => _searchCategory('atm')),
+                  _CategoryButton(icon: Icons.shopping_cart, title: language == 'en' ? 'Supermarkets' : language == 'de' ? 'Supermärkte' : 'Супермаркети', onPressed: () => _searchCategory('supermarket')),
+                  _CategoryButton(icon: Icons.wc, title: language == 'en' ? 'Public toilets' : language == 'de' ? 'Toiletten' : 'Тоалетни', onPressed: () => _searchCategory('toilets')),
+                  _CategoryButton(icon: Icons.directions_bus, title: language == 'en' ? 'Bus stations' : language == 'de' ? 'Busbahnhöfe' : 'Автогари', onPressed: () => _searchCategory('bus_station')),
+                  _CategoryButton(icon: Icons.local_gas_station, title: language == 'en' ? 'Fuel stations' : language == 'de' ? 'Tankstellen' : 'Бензиностанции', onPressed: () => _searchCategory('fuel')),
+                  _CategoryButton(icon: Icons.child_friendly, title: language == 'en' ? 'Playgrounds' : language == 'de' ? 'Spielplätze' : 'Детски площадки', onPressed: () => _searchCategory('playground')),
                 ],
               ),
 
