@@ -827,7 +827,24 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
                     leading: const Icon(Icons.place_outlined),
                     title: Text(place['name'] as String),
                     subtitle: Text((place['details'] as String).isEmpty ? query : place['details'] as String),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: language == 'en'
+                              ? 'Toggle favorite'
+                              : language == 'de'
+                                  ? 'Favorit umschalten'
+                                  : 'Добави/премахни от любими',
+                          onPressed: () => _toggleFavorite(place),
+                          icon: Icon(
+                            _isFavorite(place) ? Icons.star : Icons.star_border,
+                            color: _isFavorite(place) ? Colors.amber.shade700 : null,
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
                     onTap: () => Navigator.pop(sheetContext, place),
                   );
                 },
@@ -868,12 +885,34 @@ void _openCityMap() {
   ));
 }
 
-Future<void> _showFavorites() async {
+Future<void> _showRecentPlaces() async {
   if (_recentPlaces.isEmpty) {
-    _showMessage(context, language == 'en' ? 'Your recent places will appear here after a search.' : language == 'de' ? 'Hier erscheinen Orte nach deiner Suche.' : 'Тук ще се показват последните намерени места.');
+    _showMessage(context, language == 'en'
+        ? 'Your recent places will appear here after a search.'
+        : language == 'de'
+            ? 'Hier erscheinen Orte nach deiner Suche.'
+            : 'Тук ще се показват последните намерени места.');
     return;
   }
-  await _showPlaceResults(List<Map<String, dynamic>>.from(_recentPlaces), language == 'en' ? 'Recent places' : language == 'de' ? 'Zuletzt gesucht' : 'Последни места');
+  await _showPlaceResults(
+    List<Map<String, dynamic>>.from(_recentPlaces),
+    language == 'en' ? 'Recent places' : language == 'de' ? 'Zuletzt gesucht' : 'Последни места',
+  );
+}
+
+Future<void> _showFavorites() async {
+  if (_favoritePlaces.isEmpty) {
+    _showMessage(context, language == 'en'
+        ? 'Save a place with the star button to see it here.'
+        : language == 'de'
+            ? 'Speichere einen Ort mit dem Stern, um ihn hier zu sehen.'
+            : 'Запази място със звездата, за да се появи тук.');
+    return;
+  }
+  await _showPlaceResults(
+    List<Map<String, dynamic>>.from(_favoritePlaces),
+    language == 'en' ? 'Favorites' : language == 'de' ? 'Favoriten' : 'Любими места',
+  );
 }
 
 Future<void> _showSettings() async {
@@ -1158,18 +1197,22 @@ Future<void> _showSettings() async {
 
               const SizedBox(height: 30),
 
-              Row(
+              Column(
                 children: [
-                  Expanded(
-                    child: _BottomButton(icon: Icons.map, title: 'Карта', onPressed: _openCityMap),
+                  Row(
+                    children: [
+                      Expanded(child: _BottomButton(icon: Icons.map, title: language == 'en' ? 'Map' : language == 'de' ? 'Karte' : 'Карта', onPressed: _openCityMap)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _BottomButton(icon: Icons.history, title: language == 'en' ? 'Recent' : language == 'de' ? 'Zuletzt' : 'Последни', onPressed: _showRecentPlaces)),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _BottomButton(icon: Icons.history, title: 'Последни', onPressed: _showFavorites),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _BottomButton(icon: Icons.settings, title: 'Настройки', onPressed: _showSettings),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _BottomButton(icon: Icons.star, title: language == 'en' ? 'Favorites' : language == 'de' ? 'Favoriten' : 'Любими', onPressed: _showFavorites)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _BottomButton(icon: Icons.settings, title: language == 'en' ? 'Settings' : language == 'de' ? 'Einstellungen' : 'Настройки', onPressed: _showSettings)),
+                    ],
                   ),
                 ],
               ),
