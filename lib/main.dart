@@ -555,7 +555,7 @@ Future<void> _searchLocation() async {
                       },
                     );
                     if (!speechAvailable) {
-                      if (dialogContext.mounted) {
+                      if (mounted && dialogContext.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(language == 'en'
                               ? 'Speech recognition is unavailable on this device.'
@@ -568,7 +568,9 @@ Future<void> _searchLocation() async {
                     }
                     setDialogState(() => isListening = true);
                     await speech.listen(
-                      localeId: language == 'en' ? 'en_US' : language == 'de' ? 'de_DE' : 'bg_BG',
+                      listenOptions: stt.SpeechListenOptions(
+                        localeId: language == 'en' ? 'en_US' : language == 'de' ? 'de_DE' : 'bg_BG',
+                      ),
                       onResult: (result) {
                         controller.text = result.recognizedWords;
                         controller.selection = TextSelection.collapsed(offset: controller.text.length);
@@ -697,7 +699,7 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
             Expanded(
               child: ListView.separated(
                 itemCount: places.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final place = places[index];
                   return ListTile(
