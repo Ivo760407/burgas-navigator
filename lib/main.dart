@@ -807,9 +807,9 @@ Future<List<Map<String, dynamic>>> _fetchNightlifePlaces() async {
   const overpassQuery = r"""
 [out:json][timeout:25];
 (
-  nwr(42.650,26.270,42.715,26.375)["amenity"~"^(bar|pub|nightclub|casino)$"];
-  nwr(42.650,26.270,42.715,26.375)["club"~"^(nightclub|bar)$"];
-  nwr(42.650,26.270,42.715,26.375)["leisure"="dance"];
+  nwr(42.640,26.250,42.720,26.390)["amenity"~"^(bar|pub|nightclub|casino)$"];
+  nwr(42.640,26.250,42.720,26.390)["club"~"^(nightclub|bar)$"];
+  nwr(42.640,26.250,42.720,26.390)["leisure"="dance"];
 );
 out center tags;
 """;
@@ -852,7 +852,7 @@ out center tags;
 }
 
 Future<List<Map<String, dynamic>>> _fetchCityCategory(String category) async {
-  const bounds = '(42.650,26.270,42.715,26.375)';
+  const bounds = '(42.640,26.250,42.720,26.390)';
   final tags = category == 'hospital'
       ? 'nwr$bounds["amenity"~"^(hospital|clinic|doctors)\$"]; nwr$bounds["healthcare"~"^(hospital|clinic|doctor|centre|health_centre|medical_centre|urgent_care)\$"];'
       : category == 'police'
@@ -955,8 +955,8 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
         }
         final longitude = (coordinates[0] as num).toDouble();
         final latitude = (coordinates[1] as num).toDouble();
-        return latitude >= 42.650 && latitude <= 42.715 &&
-            longitude >= 26.270 && longitude <= 26.375;
+        return latitude >= 42.640 && latitude <= 42.720 &&
+            longitude >= 26.250 && longitude <= 26.390;
       })
       .map((feature) {
       final properties = feature['properties'] as Map<String, dynamic>? ?? {};
@@ -1017,8 +1017,8 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
       // should not discard valid places inside Sliven.
       final latitude = double.tryParse(item['lat']?.toString() ?? '') ?? 0.0;
       final longitude = double.tryParse(item['lon']?.toString() ?? '') ?? 0.0;
-      return latitude >= 42.650 && latitude <= 42.715 &&
-          longitude >= 26.270 && longitude <= 26.375;
+      return latitude >= 42.640 && latitude <= 42.720 &&
+          longitude >= 26.250 && longitude <= 26.390;
     }).map((item) {
       final address = item['address'] as Map<String, dynamic>? ?? {};
       final displayName = (item['display_name'] ?? query).toString();
