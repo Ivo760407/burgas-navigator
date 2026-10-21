@@ -1212,6 +1212,18 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
   });
   await _persistPlaces();
   if (!mounted) return;
+  final normalizedQuery = query.toLowerCase();
+  final isEmergencySearch = normalizedQuery.contains('болница') ||
+      normalizedQuery.contains('hospital') ||
+      normalizedQuery.contains('krankenhaus') ||
+      normalizedQuery.contains('полицейски участък') ||
+      normalizedQuery.contains('police station') ||
+      normalizedQuery.contains('пожарна служба') ||
+      normalizedQuery.contains('fire station');
+  if (isEmergencySearch) {
+    await _openNavigation(selected);
+    return;
+  }
   Navigator.push(context, MaterialPageRoute(
     builder: (_) => LocationMapScreen(
       latitude: selected['latitude'] as double,
