@@ -799,7 +799,67 @@ Future<void> _searchLocation() async {
   await _findPlaces(query.trim());
 }
 
+Future<List<Map<String, dynamic>>> _fetchNightlifePlaces() async {
+  // OpenStreetMap/Overpass is free and has dedicated tags for bars, pubs
+  // and nightclubs; Photon is primarily a geocoder and often misses these POIs.
+  const overpassQuery = r"""
+[out:json][timeout:18];
+area["name"~"^(Сливен|Sliven)$"]["boundary"="administrative"]["admin_level"="10"]->.sliven;
+(
+  nwr(area.sliven)["amenity"~"^(bar|pub|nightclub|casino|stripclub)$"];
+  nwr(area.sliven)["club"~"^(nightclub|bar)$"];
+);
+out center tags;
+""";
+  final uri = Uri.https('overpass-api.de', '/api/interpreter', {'data': overpassQuery});
+  final response = await http.get(uri, headers: const {
+    'Accept': 'application/json',
+    'User-Agent': 'BurgasNavigator/1.0 (free city navigation app)',
+  }).timeout(const Duration(seconds: 22));
+  if (response.statusCode != 200) {
+    throw FormatException('Overpass returned HTTP ${response.statusCode}');
+  }
+  final data = jsonDecode(response.body) as Map<String, dynamic>;
+  final elements = data['elements'] as List<dynamic>? ?? const [];
+  final places = <Map<String, dynamic>>[];
+  for (final raw in elements) {
+    if (raw is! Map<String, dynamic>) continue;
+    final tags = raw['tags'] as Map<String, dynamic>? ?? const {};
+    final name = (tags['name'] ?? tags['brand'] ?? '').toString().trim();
+    if (name.isEmpty) continue;
+    final lat = raw['lat'] ?? (raw['center'] as Map<String, dynamic>?)?['lat'];
+    final lon = raw['lon'] ?? (raw['center'] as Map<String, dynamic>?)?['lon'];
+    if (lat is! num || lon is! num) continue;
+    final address = [
+      tags['addr:street'],
+      tags['addr:housenumber'],
+      tags['addr:suburb'],
+      'Сливен',
+    ].where((part) => part != null && part.toString().trim().isNotEmpty)
+     .map((part) => part.toString().trim()).join(', ');
+    places.add({
+      'name': name,
+      'details': address,
+      'latitude': lat.toDouble(),
+      'longitude': lon.toDouble(),
+    });
+  }
+  final seen = <String>{};
+  return places.where((place) =>
+    seen.add('${place['latitude']},${place['longitude']}')).toList();
+}
+
 Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
+  final normalizedQuery = query.toLowerCase();
+  final nightlifeTerms = [
+    'нощни заведения', 'нощно заведение', 'нощен клуб', 'нощни клубове',
+    'дискотека', 'дискотеки', 'барове', 'бар', 'пъб', 'pub', 'nightclub',
+    'night clubs', 'nightlife', 'clubs', 'nachtclub', 'kneipe',
+  ];
+  if (nightlifeTerms.any(normalizedQuery.contains)) {
+    final places = await _fetchNightlifePlaces();
+    if (places.isNotEmpty) return places;
+  }
   // Try Photon first. If it is unavailable, fall back to Nominatim.
   // Neither provider requires a private API key.
   Object? photonError;
@@ -938,6 +998,7 @@ Future<void> _findPlaces(String query) async {
 Future<void> _searchCategory(String category) async {
   const terms = <String, Map<String, String>>{
     'restaurant': {'bg': 'ресторант', 'en': 'restaurant', 'de': 'Restaurant'},
+    'nightlife': {'bg': 'нощни заведения', 'en': 'nightlife', 'de': 'Nachtleben'},
     'hotel': {'bg': 'хотел', 'en': 'hotel', 'de': 'Hotel'},
     'beach': {'bg': 'плаж', 'en': 'beach', 'de': 'Strand'},
     'parking': {'bg': 'паркинг', 'en': 'parking', 'de': 'Parkplatz'},
@@ -1403,6 +1464,7 @@ Future<void> _showSettings() async {
                 runSpacing: 10,
                 children: [
                   _CategoryButton(icon: Icons.restaurant, title: language == 'en' ? 'Restaurants' : language == 'de' ? 'Restaurants' : 'Ресторанти', onPressed: () => _searchCategory('restaurant')),
+                  _CategoryButton(icon: Icons.nightlife, title: language == 'en' ? 'Nightlife' : language == 'de' ? 'Nachtleben' : 'Нощни заведения', onPressed: () => _searchCategory('nightlife')),
                   _CategoryButton(icon: Icons.hotel, title: language == 'en' ? 'Hotels' : language == 'de' ? 'Hotels' : 'Хотели', onPressed: () => _searchCategory('hotel')),
                   _CategoryButton(icon: Icons.beach_access, title: language == 'en' ? 'Beaches' : language == 'de' ? 'Strände' : 'Плажове', onPressed: () => _searchCategory('beach')),
                   _CategoryButton(icon: Icons.local_parking, title: language == 'en' ? 'Parking' : language == 'de' ? 'Parkplätze' : 'Паркинги', onPressed: () => _searchCategory('parking')),
