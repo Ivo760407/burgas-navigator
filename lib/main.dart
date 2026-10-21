@@ -8,6 +8,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const BurgasNavigatorApp());
@@ -195,13 +196,75 @@ class _HomeScreenState extends State<HomeScreen> {
   final FlutterTts _tts = FlutterTts();
   final AudioPlayer _cloudPlayer = AudioPlayer();
   final List<Map<String, dynamic>> _recentPlaces = [];
+  final List<Map<String, dynamic>> _favoritePlaces = [];
   static const String _cloudTtsUrl = String.fromEnvironment('CLOUD_TTS_URL');
 
   @override
   void initState() {
     super.initState();
     language = widget.initialLanguage;
+    _loadSavedPlaces();
     _configureTts();
+  }
+
+  String _placeKey(Map<String, dynamic> place) =>
+      place['latitude'].toString() + ',' + place['longitude'].toString();
+
+  Future<void> _loadSavedPlaces() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      List<Map<String, dynamic>> decodePlaces(String key) {
+        final raw = prefs.getString(key);
+        if (raw == null) return [];
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) return [];
+        return decoded.whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .where((item) => item['name'] is String &&
+                item['latitude'] is num && item['longitude'] is num)
+            .toList();
+      }
+      final recent = decodePlaces('burgas_recent_places');
+      final favorites = decodePlaces('burgas_favorite_places');
+      if (!mounted) return;
+      setState(() {
+        _recentPlaces..clear()..addAll(recent.take(20));
+        _favoritePlaces..clear()..addAll(favorites);
+      });
+    } catch (_) {
+      // Local storage is optional; search remains usable if it fails.
+    }
+  }
+
+  Future<void> _persistPlaces() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('burgas_recent_places', jsonEncode(_recentPlaces));
+      await prefs.setString('burgas_favorite_places', jsonEncode(_favoritePlaces));
+    } catch (_) {
+      // Do not interrupt navigation if persistence is unavailable.
+    }
+  }
+
+  bool _isFavorite(Map<String, dynamic> place) =>
+      _favoritePlaces.any((saved) => _placeKey(saved) == _placeKey(place));
+
+  Future<void> _toggleFavorite(Map<String, dynamic> place) async {
+    setState(() {
+      if (_isFavorite(place)) {
+        _favoritePlaces.removeWhere((saved) => _placeKey(saved) == _placeKey(place));
+      } else {
+        _favoritePlaces.insert(0, Map<String, dynamic>.from(place));
+      }
+    });
+    await _persistPlaces();
+    if (mounted) {
+      _showMessage(context, language == 'en'
+          ? (_isFavorite(place) ? 'Added to favorites.' : 'Removed from favorites.')
+          : language == 'de'
+              ? (_isFavorite(place) ? 'Zu Favoriten hinzugefügt.' : 'Aus Favoriten entfernt.')
+              : (_isFavorite(place) ? 'Добавено в любими.' : 'Премахнато от любими.'));
+    }
   }
 
   Future<void> _configureTts() async {
@@ -782,6 +845,8 @@ Future<void> _showPlaceResults(List<Map<String, dynamic>> places, String query) 
     _recentPlaces.insert(0, Map<String, dynamic>.from(selected));
     if (_recentPlaces.length > 20) _recentPlaces.removeLast();
   });
+  await _persistPlaces();
+  if (!mounted) return;
   Navigator.push(context, MaterialPageRoute(
     builder: (_) => LocationMapScreen(
       latitude: selected['latitude'] as double,
