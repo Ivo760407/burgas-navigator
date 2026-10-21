@@ -946,8 +946,13 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
     final features = data['features'] as List<dynamic>? ?? const [];
     final places = features.whereType<Map<String, dynamic>>()
       .where((feature) {
-        // Geocoders often omit city/locality for individual POIs.
-        // Use the Sliven urban bounding box instead of dropping those results.
+        final properties = feature['properties'] as Map<String, dynamic>? ?? {};
+        final locality = (properties['city'] ?? properties['town'] ?? properties['village'] ?? '')
+            .toString().trim().toLowerCase();
+        if (locality.isNotEmpty && locality != 'сливен' && locality != 'sliven') {
+          return false;
+        }
+        // Some POIs have no locality metadata; use the wider city-area bounds then.
         final geometry = feature['geometry'] as Map<String, dynamic>? ?? {};
         final coordinates = geometry['coordinates'] as List<dynamic>? ?? const [];
         if (coordinates.length < 2 || coordinates[0] is! num || coordinates[1] is! num) {
@@ -1013,8 +1018,14 @@ Future<List<Map<String, dynamic>>> _fetchPlaces(String query) async {
     // Accept only explicit city/town address matches; municipality membership
     // alone would incorrectly include nearby villages.
     return data.whereType<Map<String, dynamic>>().where((item) {
-      // Use the same city-area filter as Photon; missing locality metadata
-      // should not discard valid places inside Sliven.
+      // Prefer explicit locality when available; fall back to coordinates only
+      // when the geocoder omits city/town/village metadata.
+      final address = item['address'] as Map<String, dynamic>? ?? {};
+      final locality = (address['city'] ?? address['town'] ?? address['village'] ?? address['hamlet'] ?? '')
+          .toString().trim().toLowerCase();
+      if (locality.isNotEmpty && locality != 'сливен' && locality != 'sliven') {
+        return false;
+      }
       final latitude = double.tryParse(item['lat']?.toString() ?? '') ?? 0.0;
       final longitude = double.tryParse(item['lon']?.toString() ?? '') ?? 0.0;
       return latitude >= 42.640 && latitude <= 42.720 &&
